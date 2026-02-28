@@ -1,0 +1,5864 @@
+﻿Ask 10 questions about your data:
+For each question, declare the question in qnelighs, provide the mongo query that answers the question. Output results of the query. 10 questions should be tested on the mongo shell client. Query should be varied and effectively demonstrate the broad capabilities of mongo query language. Include aggregations, filtering, sorting.
+
+
+* We aggregate, filter, and sort in every query, using commands $add_field, $match, and $sort, respectively.
+
+
+Looking at elderly population, we can ask a couple questions …
+1. See what are the countries with the most covid cases per capita, and look at their elderly populations per capita. This is asking, “Of the countries most impacted by covid, how much of the country is elderly?”
+2. Now, look at the opposite, so look at what countries have the most elderly per capita, and look at their covid cases per capita. This is asking, “Of the countries with the biggest proportion of elderly, how were these countries impacted by covid?”
+
+
+Looking at urban and non-urban populations, we can ask a couple questions …
+3. What are the most urban populations, and what are their covid cases per capita?
+4. What are the least urban populations, and what are their covid cases per capita?[a]
+
+
+Looking at the most and least dense populations …
+5. What are the most densely populated countries, and what are their covid cases per capita?
+6. What are the least densely populated countries, and what are their covid cases per capita?[b]
+
+
+Looking at wealthiest vs poorest (using Human development index) countries:
+7. What are the highest HDI countries, and what are their covid cases per capita?
+8. What are the lowest HDI countries, and what are their covid cases per capita?[c]
+
+
+
+
+Same questions as above, but lets look at death rates instead of cases:
+9. What are the highest HDI countries, and what are their death rates?
+10. What are the lowest HDI countries, and what are their death rates?[d]
+
+
+
+
+
+
+
+
+Below, we paste each query, and its respective output (at least partial - 10 results).
+________________
+
+
+1: cases_per_capita_elderly_per_capita
+[
+  {
+    $addFields: {
+      country_code: {
+        $substr: ["$location_key", 0, 2]
+      }
+    }
+  },
+  {
+    $group: {
+      _id: "$country_code",
+      latest_cumulative_confirmed: {
+        $sum: "$cumulative_confirmed"
+      }
+    }
+  },
+  {
+    $lookup: {
+      from: "demographics_normalized",
+      let: { cc: "$_id" },
+      pipeline: [
+        {
+          $match: {
+            $expr: {
+              $eq: ["$location_key", "$$cc"]
+            }
+          }
+        }
+      ],
+      as: "demographics"
+    }
+  },
+  {
+    $addFields: {
+      total_elderly: {
+        $sum: [
+          { $arrayElemAt: ["$demographics.population_age_60_69", 0] },
+          { $arrayElemAt: ["$demographics.population_age_70_79", 0] },
+          { $arrayElemAt: ["$demographics.population_age_80_and_older", 0] }
+        ]
+      },
+      total_population: {
+        $arrayElemAt: ["$demographics.population", 0]
+      }
+    }
+  },
+  {
+    $addFields: {
+      confirmed_per_capita: {
+        $cond: {
+          if: { $gt: ["$total_population", 0] },
+          then: { $divide: ["$latest_cumulative_confirmed", "$total_population"] },
+          else: null
+        }
+      },
+      elderly_per_capita: {
+        $cond: {
+          if: { $gt: ["$total_population", 0] },
+          then: { $divide: ["$total_elderly", "$total_population"] },
+          else: null
+        }
+      }
+    }
+  },
+  {
+    $sort: {
+      confirmed_per_capita: -1,
+      elderly_per_capita: -1
+    }
+  }
+]
+________________
+Query 1 Results of Query:
+database> db.epidemiology_normalized.aggregate([
+|   {
+|     $addFields: {
+|       country_code: {
+|         $substr: ["$location_key", 0, 2]
+|       }
+|     }
+|   },
+|   {
+|     $group: {
+|       _id: "$country_code",
+|       latest_cumulative_confirmed: {
+|         $sum: "$cumulative_confirmed"
+|       }
+|     }
+|   },
+|   {
+|     $lookup: {
+|       from: "demographics_normalized",
+|       let: { cc: "$_id" },
+|       pipeline: [
+|         {
+|           $match: {
+|             $expr: {
+|               $eq: ["$location_key", "$$cc"]
+|             }
+|           }
+|         }
+|       ],
+|       as: "demographics"
+|     }
+|   },
+|   {
+|     $addFields: {
+|       total_elderly: {
+|         $sum: [
+|           { $arrayElemAt: ["$demographics.population_age_60_69", 0] },
+|           { $arrayElemAt: ["$demographics.population_age_70_79", 0] },
+|           { $arrayElemAt: ["$demographics.population_age_80_and_older", 0] }
+|         ]
+|       },
+|       total_population: {
+|         $arrayElemAt: ["$demographics.population", 0]
+|       }
+|     }
+|   },
+|   {
+|     $addFields: {
+|       confirmed_per_capita: {
+|         $cond: {
+|           if: { $gt: ["$total_population", 0] },
+|           then: { $divide: ["$latest_cumulative_confirmed", "$total_population"] },
+|           else: null
+|         }
+|       },
+|       elderly_per_capita: {
+|         $cond: {
+|           if: { $gt: ["$total_population", 0] },
+|           then: { $divide: ["$total_elderly", "$total_population"] },
+|           else: null
+|         }
+|       }
+|     }
+|   },
+|   {
+|     $sort: {
+|       confirmed_per_capita: -1,
+|       elderly_per_capita: -1
+|     }
+|   }
+| ]
+| )
+[
+  {
+    _id: 'NL',
+    latest_cumulative_confirmed: 48808188,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0cfce'),
+        location_key: 'NL',
+        population: 17282163,
+        population_male: 8581086,
+        population_female: 8701077,
+        population_rural: 1408121,
+        population_urban: 15924729,
+        population_largest_city: 1140339,
+        population_clustered: 2149006,
+        population_density: 504,
+        human_development_index: 0.931,
+        population_age_00_09: 1783504,
+        population_age_10_19: 2008334,
+        population_age_20_29: 2201788,
+        population_age_30_39: 2108199,
+        population_age_40_49: 2261107,
+        population_age_50_59: 2508388,
+        population_age_60_69: 2089913,
+        population_age_70_79: 1522110,
+        population_age_80_and_older: 798820
+      }
+    ],
+    total_elderly: 4410843,
+    total_population: 17282163,
+    confirmed_per_capita: 2.8241944020548817,
+    elderly_per_capita: 0.2552251705993052
+  },
+  {
+    _id: 'AT',
+    latest_cumulative_confirmed: 15025545,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d7682b4439fff09724'),
+        location_key: 'AT',
+        population: 8858775,
+        population_male: 4357033,
+        population_female: 4501742,
+        population_rural: 3682651,
+        population_urban: 5194416,
+        population_largest_city: 1915338,
+        population_clustered: 1915338,
+        population_density: 107.1,
+        human_development_index: 0.908,
+        population_age_00_09: 855419,
+        population_age_10_19: 862277,
+        population_age_20_29: 1134471,
+        population_age_30_39: 1203124,
+        population_age_40_49: 1209216,
+        population_age_50_59: 1382468,
+        population_age_60_69: 989286,
+        population_age_70_79: 779997,
+        population_age_80_and_older: 442517
+      }
+    ],
+    total_elderly: 2211800,
+    total_population: 8858775,
+    confirmed_per_capita: 1.6961199488642618,
+    elderly_per_capita: 0.24967334648413578
+  },
+  {
+    _id: 'IL',
+    latest_cumulative_confirmed: 12717036,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0bd48'),
+        location_key: 'IL',
+        population: 8655541,
+        population_male: 4308117,
+        population_female: 4347424,
+        population_rural: 678907,
+        population_urban: 8374393,
+        population_largest_city: 4096963,
+        population_clustered: 5237807,
+        population_density: 399.979,
+        human_development_index: 0.903,
+        population_age_00_09: 1671096,
+        population_age_10_19: 1405063,
+        population_age_20_29: 1196975,
+        population_age_30_39: 1122245,
+        population_age_40_49: 1040177,
+        population_age_50_59: 795496,
+        population_age_60_69: 703643,
+        population_age_70_79: 459660,
+        population_age_80_and_older: 261186
+      }
+    ],
+    total_elderly: 1424489,
+    total_population: 8655541,
+    confirmed_per_capita: 1.469236411681257,
+    elderly_per_capita: 0.16457538587131643
+  },
+  {
+    _id: 'GB',
+    latest_cumulative_confirmed: 93263098,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0ba73'),
+        location_key: 'GB',
+        population: 66647112,
+        population_male: 32901036,
+        population_female: 33746076,
+        population_rural: 10926089,
+        population_urban: 55908316,
+        population_largest_city: 9176530,
+        population_clustered: 18018197,
+        population_density: 273.8,
+        human_development_index: 0.922,
+        population_age_00_09: 8031553,
+        population_age_10_19: 7570117,
+        population_age_20_29: 8697520,
+        population_age_30_39: 8872959,
+        population_age_40_49: 8465444,
+        population_age_50_59: 9020629,
+        population_age_60_69: 7101044,
+        population_age_70_79: 5567890,
+        population_age_80_and_older: 3319956
+      }
+    ],
+    total_elderly: 15988890,
+    total_population: 66647112,
+    confirmed_per_capita: 1.399356929374524,
+    elderly_per_capita: 0.23990371855872764
+  },
+  {
+    _id: 'FR',
+    latest_cumulative_confirmed: 88958841,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0b9fc'),
+        location_key: 'FR',
+        population: 67012883,
+        population_male: 32386507,
+        population_female: 34626376,
+        population_rural: 12936523,
+        population_urban: 54123364,
+        population_largest_city: 10958187,
+        population_clustered: 15324817,
+        population_density: 105.6,
+        human_development_index: 0.901,
+        population_age_00_09: 7864258,
+        population_age_10_19: 8319867,
+        population_age_20_29: 7526449,
+        population_age_30_39: 8298645,
+        population_age_40_49: 8663535,
+        population_age_50_59: 8788270,
+        population_age_60_69: 7999231,
+        population_age_70_79: 5445963,
+        population_age_80_and_older: 4106665
+      }
+    ],
+    total_elderly: 17551859,
+    total_population: 67012883,
+    confirmed_per_capita: 1.327488641251265,
+    elderly_per_capita: 0.261917682305953
+  },
+  {
+    _id: 'CZ',
+    latest_cumulative_confirmed: 12154031,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d7682b4439fff0b23d'),
+        location_key: 'CZ',
+        population: 10649800,
+        population_male: 5244194,
+        population_female: 5405606,
+        population_rural: 2782553,
+        population_urban: 7887156,
+        population_largest_city: 1298804,
+        population_clustered: 1298804,
+        population_density: 137.7,
+        human_development_index: 0.888,
+        population_age_00_09: 1139146,
+        population_age_10_19: 1021305,
+        population_age_20_29: 1166994,
+        population_age_30_39: 1512166,
+        population_age_40_49: 1724438,
+        population_age_50_59: 1320174,
+        population_age_60_69: 1358902,
+        population_age_70_79: 973768,
+        population_age_80_and_older: 432907
+      }
+    ],
+    total_elderly: 2765577,
+    total_population: 10649800,
+    confirmed_per_capita: 1.1412449999061016,
+    elderly_per_capita: 0.25968346823414523
+  },
+  {
+    _id: 'IT',
+    latest_cumulative_confirmed: 64244069,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0c4bd'),
+        location_key: 'IT',
+        population: 60359546,
+        population_male: 29384766,
+        population_female: 30974780,
+        population_rural: 17645430,
+        population_urban: 42651966,
+        population_largest_city: 4234019,
+        population_clustered: 11351117,
+        population_density: 202.9,
+        human_development_index: 0.873,
+        population_age_00_09: 5090482,
+        population_age_10_19: 5768874,
+        population_age_20_29: 6201270,
+        population_age_30_39: 7074218,
+        population_age_40_49: 9242654,
+        population_age_50_59: 9352231,
+        population_age_60_69: 7337210,
+        population_age_70_79: 5962533,
+        population_age_80_and_older: 4330074
+      }
+    ],
+    total_elderly: 17629817,
+    total_population: 60359546,
+    confirmed_per_capita: 1.064356398571984,
+    elderly_per_capita: 0.2920800133254813
+  },
+  {
+    _id: 'CH',
+    latest_cumulative_confirmed: 8078882,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d7682b4439fff0adf5'),
+        location_key: 'CH',
+        population: 8544527,
+        population_male: 4237121,
+        population_female: 4307406,
+        population_rural: 2242404,
+        population_urban: 6332428,
+        population_largest_city: 1383092,
+        population_clustered: 1383092,
+        population_density: 213.6,
+        human_development_index: 0.93,
+        population_age_00_09: 868184,
+        population_age_10_19: 841274,
+        population_age_20_29: 1052733,
+        population_age_30_39: 1215196,
+        population_age_40_49: 1204432,
+        population_age_50_59: 1281878,
+        population_age_60_69: 931525,
+        population_age_70_79: 705653,
+        population_age_80_and_older: 443652
+      }
+    ],
+    total_elderly: 2080830,
+    total_population: 8544527,
+    confirmed_per_capita: 0.945503712493389,
+    elderly_per_capita: 0.2435278161096571
+  },
+  {
+    _id: 'EE',
+    latest_cumulative_confirmed: 1187093,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0b483'),
+        location_key: 'EE',
+        population: 1324820,
+        population_male: 625635,
+        population_female: 699185,
+        population_rural: 410566,
+        population_urban: 916024,
+        population_largest_city: 441321,
+        population_clustered: null,
+        population_density: 30.4,
+        human_development_index: 0.892,
+        population_age_00_09: 144911,
+        population_age_10_19: 133739,
+        population_age_20_29: 152825,
+        population_age_30_39: 192519,
+        population_age_40_49: 182048,
+        population_age_50_59: 171824,
+        population_age_60_69: 162450,
+        population_age_70_79: 109787,
+        population_age_80_and_older: 74717
+      }
+    ],
+    total_elderly: 346954,
+    total_population: 1324820,
+    confirmed_per_capita: 0.8960409716036896,
+    elderly_per_capita: 0.26188765266224845
+  },
+  {
+    _id: 'US',
+    latest_cumulative_confirmed: 273492443,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0dc45'),
+        location_key: 'US',
+        population: 331002647,
+        population_male: 163786016,
+        population_female: 167216631,
+        population_rural: 57576495,
+        population_urban: 270663028,
+        population_largest_city: 18804722,
+        population_clustered: 152587187,
+        population_density: 36.185,
+        human_development_index: 0.92,
+        population_age_00_09: 39721484,
+        population_age_10_19: 42332395,
+        population_age_20_29: 46094075,
+        population_age_30_39: 44668270,
+        population_age_40_49: 40348397,
+        population_age_50_59: 42120077,
+        population_age_60_69: 38488170,
+        population_age_70_79: 24082597,
+        population_age_80_and_older: 13147182
+      }
+    ],
+    total_elderly: 75717949,
+    total_population: 331002647,
+    confirmed_per_capita: 0.8262545495595387,
+    elderly_per_capita: 0.22875330359518242
+  },
+  {
+    _id: 'AU',
+    latest_cumulative_confirmed: 20249342,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d7682b4439fff09783'),
+        location_key: 'AU',
+        population: 25499881,
+        population_male: 12698625,
+        population_female: 12801256,
+        population_rural: 3519551,
+        population_urban: 21844756,
+        population_largest_city: 4870388,
+        population_clustered: 15446689,
+        population_density: 3.319,
+        human_development_index: 0.939,
+        population_age_00_09: 3308974,
+        population_age_10_19: 3130480,
+        population_age_20_29: 3375454,
+        population_age_30_39: 3718344,
+        population_age_40_49: 3306060,
+        population_age_50_59: 3107735,
+        population_age_60_69: 2651187,
+        population_age_70_79: 1846376,
+        population_age_80_and_older: 1055271
+      }
+    ],
+    total_elderly: 5552834,
+    total_population: 25499881,
+    confirmed_per_capita: 0.7940955489164832,
+    elderly_per_capita: 0.21775921228808873
+  },
+  {
+    _id: 'CL',
+    latest_cumulative_confirmed: 13838429,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d7682b4439fff0ae12'),
+        location_key: 'CL',
+        population: 17574003,
+        population_male: 8972014,
+        population_female: 8601989,
+        population_rural: 2341903,
+        population_urban: 16610135,
+        population_largest_city: 6723516,
+        population_clustered: 6723516,
+        population_density: 25.71,
+        human_development_index: 0.832,
+        population_age_00_09: 2428079,
+        population_age_10_19: 2493879,
+        population_age_20_29: 2995538,
+        population_age_30_39: 2945404,
+        population_age_40_49: 2578404,
+        population_age_50_59: 2352271,
+        population_age_60_69: 1791787,
+        population_age_70_79: 993126,
+        population_age_80_and_older: 537721
+      }
+    ],
+    total_elderly: 3322634,
+    total_population: 17574003,
+    confirmed_per_capita: 0.7874375007219471,
+    elderly_per_capita: 0.1890652914990398
+  },
+  {
+    _id: 'BE',
+    latest_cumulative_confirmed: 8947309,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d7682b4439fff097a7'),
+        location_key: 'BE',
+        population: 11455519,
+        population_male: 5644826,
+        population_female: 5810693,
+        population_rural: 224973,
+        population_urban: 11259082,
+        population_largest_city: 2065284,
+        population_clustered: 3102595,
+        population_density: 375.3,
+        human_development_index: 0.931,
+        population_age_00_09: 1282761,
+        population_age_10_19: 1288307,
+        population_age_20_29: 1416867,
+        population_age_30_39: 1488564,
+        population_age_40_49: 1508902,
+        population_age_50_59: 1594256,
+        population_age_60_69: 1326035,
+        population_age_70_79: 902858,
+        population_age_80_and_older: 646969
+      }
+    ],
+    total_elderly: 2875862,
+    total_population: 11455519,
+    confirmed_per_capita: 0.7810478949055036,
+    elderly_per_capita: 0.2510459805443996
+  },
+  {
+    _id: 'FO',
+    latest_cumulative_confirmed: 34658,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0b9fb'),
+        location_key: 'FO',
+        population: 48865,
+        population_male: 27785,
+        population_female: 25775,
+        population_rural: 28124,
+        population_urban: 20554,
+        population_largest_city: null,
+        population_clustered: null,
+        population_density: 35.004,
+        human_development_index: null,
+        population_age_00_09: 7165,
+        population_age_10_19: 7068,
+        population_age_20_29: 7773,
+        population_age_30_39: 6229,
+        population_age_40_49: 6056,
+        population_age_50_59: 6837,
+        population_age_60_69: 5844,
+        population_age_70_79: 4321,
+        population_age_80_and_older: 2267
+      }
+    ],
+    total_elderly: 12432,
+    total_population: 48865,
+    confirmed_per_capita: 0.7092602066919063,
+    elderly_per_capita: 0.25441522562161056
+  },
+  {
+    _id: 'DE',
+    latest_cumulative_confirmed: 57763003,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d7682b4439fff0b298'),
+        location_key: 'DE',
+        population: 83019213,
+        population_male: 40966691,
+        population_female: 42052522,
+        population_rural: 18807964,
+        population_urban: 64324835,
+        population_largest_city: 3556792,
+        population_clustered: 7977060,
+        population_density: 234.7,
+        human_development_index: 0.942,
+        population_age_00_09: 7588635,
+        population_age_10_19: 7705657,
+        population_age_20_29: 9800607,
+        population_age_30_39: 10646445,
+        population_age_40_49: 10426257,
+        population_age_50_59: 13474166,
+        population_age_60_69: 10302411,
+        population_age_70_79: 7685929,
+        population_age_80_and_older: 5389106
+      }
+    ],
+    total_elderly: 23377446,
+    total_population: 83019213,
+    confirmed_per_capita: 0.69577873497789,
+    elderly_per_capita: 0.28159079272408905
+  },
+  {
+    _id: 'ES',
+    latest_cumulative_confirmed: 31281187,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0b496'),
+        location_key: 'ES',
+        population: 46937060,
+        population_male: 23009259,
+        population_female: 23927801,
+        population_rural: 9149372,
+        population_urban: 37927409,
+        population_largest_city: 6559041,
+        population_clustered: 12100168,
+        population_density: 93.1,
+        human_development_index: 0.876,
+        population_age_00_09: 4424389,
+        population_age_10_19: 4837889,
+        population_age_20_29: 4813442,
+        population_age_30_39: 6238063,
+        population_age_40_49: 7796721,
+        population_age_50_59: 6913603,
+        population_age_60_69: 5213631,
+        population_age_70_79: 3818438,
+        population_age_80_and_older: 2880884
+      }
+    ],
+    total_elderly: 11912953,
+    total_population: 46937060,
+    confirmed_per_capita: 0.6664496455466107,
+    elderly_per_capita: 0.25380697044084144
+  },
+  {
+    _id: 'CY',
+    latest_cumulative_confirmed: 579899,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d7682b4439fff0b23c'),
+        location_key: 'CY',
+        population: 875899,
+        population_male: 427831,
+        population_female: 448068,
+        population_rural: 397867,
+        population_urban: 800708,
+        population_largest_city: null,
+        population_clustered: null,
+        population_density: 94.4,
+        human_development_index: 0.85,
+        population_age_00_09: 95734,
+        population_age_10_19: 94326,
+        population_age_20_29: 137873,
+        population_age_30_39: 139859,
+        population_age_40_49: 110212,
+        population_age_50_59: 108417,
+        population_age_60_69: 93559,
+        population_age_70_79: 63906,
+        population_age_80_and_older: 32013
+      }
+    ],
+    total_elderly: 189478,
+    total_population: 875899,
+    confirmed_per_capita: 0.6620614933913613,
+    elderly_per_capita: 0.21632402822699878
+  },
+  {
+    _id: 'AR',
+    latest_cumulative_confirmed: 27516244,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d7682b4439fff09506'),
+        location_key: 'AR',
+        population: 44938712,
+        population_male: 19523766,
+        population_female: 20593330,
+        population_rural: 3599141,
+        population_urban: 41339571,
+        population_largest_city: 15057273,
+        population_clustered: 19280518,
+        population_density: 16.515,
+        human_development_index: 0.825,
+        population_age_00_09: 6718871,
+        population_age_10_19: 7045513,
+        population_age_20_29: 6430658,
+        population_age_30_39: 5777148,
+        population_age_40_49: 4507125,
+        population_age_50_59: 3911943,
+        population_age_60_69: 2914251,
+        population_age_70_79: 1817557,
+        population_age_80_and_older: 994030
+      }
+    ],
+    total_elderly: 5725838,
+    total_population: 44938712,
+    confirmed_per_capita: 0.6123060224779028,
+    elderly_per_capita: 0.12741437716327964
+  },
+  {
+    _id: 'SM',
+    latest_cumulative_confirmed: 20552,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0db9c'),
+        location_key: 'SM',
+        population: 33938,
+        population_male: 15936,
+        population_female: 17019,
+        population_rural: 891,
+        population_urban: 32969,
+        population_largest_city: null,
+        population_clustered: null,
+        population_density: 565.633,
+        human_development_index: null,
+        population_age_00_09: 3098,
+        population_age_10_19: 3625,
+        population_age_20_29: 3766,
+        population_age_30_39: 3664,
+        population_age_40_49: 4693,
+        population_age_50_59: 5377,
+        population_age_60_69: 3802,
+        population_age_70_79: 2811,
+        population_age_80_and_older: 2121
+      }
+    ],
+    total_elderly: 8734,
+    total_population: 33938,
+    confirmed_per_capita: 0.6055748718250928,
+    elderly_per_capita: 0.2573516412281219
+  },
+  {
+    _id: 'AD',
+    latest_cumulative_confirmed: 46147,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d7682b4439fff094da'),
+        location_key: 'AD',
+        population: 77265,
+        population_male: 58625,
+        population_female: 55581,
+        population_rural: 9269,
+        population_urban: 67873,
+        population_largest_city: null,
+        population_clustered: null,
+        population_density: 164.394,
+        human_development_index: 0.858,
+        population_age_00_09: 9370,
+        population_age_10_19: 12022,
+        population_age_20_29: 10727,
+        population_age_30_39: 12394,
+        population_age_40_49: 21001,
+        population_age_50_59: 20720,
+        population_age_60_69: 14433,
+        population_age_70_79: 8657,
+        population_age_80_and_older: 4881
+      }
+    ],
+    total_elderly: 27971,
+    total_population: 77265,
+    confirmed_per_capita: 0.5972561962078561,
+    elderly_per_capita: 0.3620138484436679
+  }
+]
+Type "it" for more
+database> 
+
+
+
+
+
+
+________________
+
+
+2: elderly_per_capita_cases_per_capita
+[
+  {
+    $addFields: {
+      country_code: {
+        $substr: ["$location_key", 0, 2]
+      }
+    }
+  },
+  {
+    $group: {
+      _id: "$country_code",
+      latest_cumulative_confirmed: {
+        $sum: "$cumulative_confirmed"
+      }
+    }
+  },
+  {
+    $lookup: {
+      from: "demographics_normalized",
+      let: { cc: "$_id" },
+      pipeline: [
+        {
+          $match: {
+            $expr: {
+              $eq: ["$location_key", "$$cc"]
+            }
+          }
+        }
+      ],
+      as: "demographics"
+    }
+  },
+  {
+    $addFields: {
+      total_elderly: {
+        $sum: [
+          {
+            $arrayElemAt: [
+              "$demographics.population_age_60_69",
+              0
+            ]
+          },
+          {
+            $arrayElemAt: [
+              "$demographics.population_age_70_79",
+              0
+            ]
+          },
+          {
+            $arrayElemAt: [
+              "$demographics.population_age_80_and_older",
+              0
+            ]
+          }
+        ]
+      },
+      total_population: {
+        $arrayElemAt: [
+          "$demographics.population",
+          0
+        ]
+      }
+    }
+  },
+  {
+    $addFields: {
+      confirmed_per_capita: {
+        $cond: {
+          if: { $gt: ["$total_population", 0] },
+          then: {
+            $divide: [
+              "$latest_cumulative_confirmed",
+              "$total_population"
+            ]
+          },
+          else: null
+        }
+      },
+      elderly_per_capita: {
+        $cond: {
+          if: { $gt: ["$total_population", 0] },
+          then: {
+            $divide: [
+              "$total_elderly",
+              "$total_population"
+            ]
+          },
+          else: null
+        }
+      }
+    }
+  },
+  {
+    $sort: {
+      elderly_per_capita: -1,
+      confirmed_per_capita: -1
+    }
+  }
+]
+________________
+Query 2 Results of Query:
+
+
+database> db.epidemiology_normalized.aggregate([
+|   {
+|     $addFields: {
+|       country_code: {
+|         $substr: ["$location_key", 0, 2]
+|       }
+|     }
+|   },
+|   {
+|     $group: {
+|       _id: "$country_code",
+|       latest_cumulative_confirmed: {
+|         $sum: "$cumulative_confirmed"
+|       }
+|     }
+|   },
+|   {
+|     $lookup: {
+|       from: "demographics_normalized",
+|       let: { cc: "$_id" },
+|       pipeline: [
+|         {
+|           $match: {
+|             $expr: {
+|               $eq: ["$location_key", "$$cc"]
+|             }
+|           }
+|         }
+|       ],
+|       as: "demographics"
+|     }
+|   },
+|   {
+|     $addFields: {
+|       total_elderly: {
+|         $sum: [
+|           {
+|             $arrayElemAt: [
+|               "$demographics.population_age_60_69",
+|               0
+|             ]
+|           },
+|           {
+|             $arrayElemAt: [
+|               "$demographics.population_age_70_79",
+|               0
+|             ]
+|           },
+|           {
+|             $arrayElemAt: [
+|               "$demographics.population_age_80_and_older",
+|               0
+|             ]
+|           }
+|         ]
+|       },
+|       total_population: {
+|         $arrayElemAt: [
+|           "$demographics.population",
+|           0
+|         ]
+|       }
+|     }
+|   },
+|   {
+|     $addFields: {
+|       confirmed_per_capita: {
+|         $cond: {
+|           if: { $gt: ["$total_population", 0] },
+|           then: {
+|             $divide: [
+|               "$latest_cumulative_confirmed",
+|               "$total_population"
+|             ]
+|           },
+|           else: null
+|         }
+|       },
+|       elderly_per_capita: {
+|         $cond: {
+|           if: { $gt: ["$total_population", 0] },
+|           then: {
+|             $divide: [
+|               "$total_elderly",
+|               "$total_population"
+|             ]
+|           },
+|           else: null
+|         }
+|       }
+|     }
+|   },
+|   {
+|     $sort: {
+|       elderly_per_capita: -1,
+|       confirmed_per_capita: -1
+|     }
+|   }
+| ]
+| )
+[
+  {
+    _id: 'VA',
+    latest_cumulative_confirmed: 26,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0e92f'),
+        location_key: 'VA',
+        population: 809,
+        population_male: 6788,
+        population_female: 4208,
+        population_rural: null,
+        population_urban: null,
+        population_largest_city: null,
+        population_clustered: null,
+        population_density: 1838.636,
+        human_development_index: null,
+        population_age_00_09: 1603,
+        population_age_10_19: 1179,
+        population_age_20_29: 1196,
+        population_age_30_39: 1236,
+        population_age_40_49: 1329,
+        population_age_50_59: 1348,
+        population_age_60_69: 1253,
+        population_age_70_79: 1189,
+        population_age_80_and_older: 661
+      }
+    ],
+    total_elderly: 3103,
+    total_population: 809,
+    confirmed_per_capita: 0.032138442521631644,
+    elderly_per_capita: 3.835599505562423
+  },
+  {
+    _id: 'AD',
+    latest_cumulative_confirmed: 46147,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d7682b4439fff094da'),
+        location_key: 'AD',
+        population: 77265,
+        population_male: 58625,
+        population_female: 55581,
+        population_rural: 9269,
+        population_urban: 67873,
+        population_largest_city: null,
+        population_clustered: null,
+        population_density: 164.394,
+        human_development_index: 0.858,
+        population_age_00_09: 9370,
+        population_age_10_19: 12022,
+        population_age_20_29: 10727,
+        population_age_30_39: 12394,
+        population_age_40_49: 21001,
+        population_age_50_59: 20720,
+        population_age_60_69: 14433,
+        population_age_70_79: 8657,
+        population_age_80_and_older: 4881
+      }
+    ],
+    total_elderly: 27971,
+    total_population: 77265,
+    confirmed_per_capita: 0.5972561962078561,
+    elderly_per_capita: 0.3620138484436679
+  },
+  {
+    _id: 'JP',
+    latest_cumulative_confirmed: 39606018,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0c53b'),
+        location_key: 'JP',
+        population: 126476458,
+        population_male: 61753045,
+        population_female: 64723413,
+        population_rural: 10482515,
+        population_urban: 115782416,
+        population_largest_city: 37435191,
+        population_clustered: 81716514,
+        population_density: 346.934,
+        human_development_index: 0.919,
+        population_age_00_09: 10179969,
+        population_age_10_19: 11267171,
+        population_age_20_29: 12147325,
+        population_age_30_39: 14455416,
+        population_age_40_49: 18473075,
+        population_age_50_59: 16541515,
+        population_age_60_69: 15875235,
+        population_age_70_79: 16185375,
+        population_age_80_and_older: 11351377
+      }
+    ],
+    total_elderly: 43411987,
+    total_population: 126476458,
+    confirmed_per_capita: 0.31314932934001044,
+    elderly_per_capita: 0.34324164106493243
+  },
+  {
+    _id: 'IM',
+    latest_cumulative_confirmed: 38008,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0c20f'),
+        location_key: 'IM',
+        population: 85032,
+        population_male: 47027,
+        population_female: 46709,
+        population_rural: 39979,
+        population_urban: 44605,
+        population_largest_city: null,
+        population_clustered: null,
+        population_density: 149.179,
+        human_development_index: null,
+        population_age_00_09: 10146,
+        population_age_10_19: 10137,
+        population_age_20_29: 10876,
+        population_age_30_39: 10570,
+        population_age_40_49: 12225,
+        population_age_50_59: 14013,
+        population_age_60_69: 11359,
+        population_age_70_79: 8980,
+        population_age_80_and_older: 5428
+      }
+    ],
+    total_elderly: 25767,
+    total_population: 85032,
+    confirmed_per_capita: 0.44698466459685765,
+    elderly_per_capita: 0.3030270956816257
+  },
+  {
+    _id: 'BM',
+    latest_cumulative_confirmed: 18019,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d7682b4439fff097d4'),
+        location_key: 'BM',
+        population: 62273,
+        population_male: 32322,
+        population_female: 34524,
+        population_rural: 0,
+        population_urban: 63918,
+        population_largest_city: null,
+        population_clustered: null,
+        population_density: 1245.46,
+        human_development_index: null,
+        population_age_00_09: 7430,
+        population_age_10_19: 7680,
+        population_age_20_29: 8063,
+        population_age_30_39: 7719,
+        population_age_40_49: 7253,
+        population_age_50_59: 10229,
+        population_age_60_69: 9484,
+        population_age_70_79: 5676,
+        population_age_80_and_older: 3313
+      }
+    ],
+    total_elderly: 18473,
+    total_population: 62273,
+    confirmed_per_capita: 0.2893549371316622,
+    elderly_per_capita: 0.2966454161514621
+  },
+  {
+    _id: 'MQ',
+    latest_cumulative_confirmed: 219529,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0c5de'),
+        location_key: 'MQ',
+        population: 375265,
+        population_male: 172607,
+        population_female: 202658,
+        population_rural: null,
+        population_urban: null,
+        population_largest_city: null,
+        population_clustered: null,
+        population_density: 354.024,
+        human_development_index: null,
+        population_age_00_09: 35953,
+        population_age_10_19: 47122,
+        population_age_20_29: 41372,
+        population_age_30_39: 34102,
+        population_age_40_49: 44187,
+        population_age_50_59: 62795,
+        population_age_60_69: 52467,
+        population_age_70_79: 33672,
+        population_age_80_and_older: 23595
+      }
+    ],
+    total_elderly: 109734,
+    total_population: 375265,
+    confirmed_per_capita: 0.5849972685968582,
+    elderly_per_capita: 0.29241735840006394
+  },
+  {
+    _id: 'IT',
+    latest_cumulative_confirmed: 64244069,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0c4bd'),
+        location_key: 'IT',
+        population: 60359546,
+        population_male: 29384766,
+        population_female: 30974780,
+        population_rural: 17645430,
+        population_urban: 42651966,
+        population_largest_city: 4234019,
+        population_clustered: 11351117,
+        population_density: 202.9,
+        human_development_index: 0.873,
+        population_age_00_09: 5090482,
+        population_age_10_19: 5768874,
+        population_age_20_29: 6201270,
+        population_age_30_39: 7074218,
+        population_age_40_49: 9242654,
+        population_age_50_59: 9352231,
+        population_age_60_69: 7337210,
+        population_age_70_79: 5962533,
+        population_age_80_and_older: 4330074
+      }
+    ],
+    total_elderly: 17629817,
+    total_population: 60359546,
+    confirmed_per_capita: 1.064356398571984,
+    elderly_per_capita: 0.2920800133254813
+  },
+  {
+    _id: 'FI',
+    latest_cumulative_confirmed: 1277473,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0b9f7'),
+        location_key: 'FI',
+        population: 5517919,
+        population_male: 2723290,
+        population_female: 2794629,
+        population_rural: 803426,
+        population_urban: 4716888,
+        population_largest_city: 1292232,
+        population_clustered: 1292232,
+        population_density: 18.1,
+        human_development_index: 0.883,
+        population_age_00_09: 576696,
+        population_age_10_19: 601705,
+        population_age_20_29: 675248,
+        population_age_30_39: 706147,
+        population_age_40_49: 657943,
+        population_age_50_59: 732782,
+        population_age_60_69: 724769,
+        population_age_70_79: 539919,
+        population_age_80_and_older: 302710
+      }
+    ],
+    total_elderly: 1567398,
+    total_population: 5517919,
+    confirmed_per_capita: 0.2315135470455438,
+    elderly_per_capita: 0.28405600009713805
+  },
+  {
+    _id: 'PT',
+    latest_cumulative_confirmed: 5496737,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0dabf'),
+        location_key: 'PT',
+        population: 10276617,
+        population_male: 4852366,
+        population_female: 5424251,
+        population_rural: 3515838,
+        population_urban: 6753579,
+        population_largest_city: 2942097,
+        population_clustered: 4251902,
+        population_density: 113,
+        human_development_index: 0.83,
+        population_age_00_09: 897215,
+        population_age_10_19: 1063095,
+        population_age_20_29: 1086035,
+        population_age_30_39: 1261879,
+        population_age_40_49: 1576493,
+        population_age_50_59: 1478921,
+        population_age_60_69: 1286927,
+        population_age_70_79: 964596,
+        population_age_80_and_older: 661456
+      }
+    ],
+    total_elderly: 2912979,
+    total_population: 10276617,
+    confirmed_per_capita: 0.5348780634716658,
+    elderly_per_capita: 0.2834569975703094
+  },
+  {
+    _id: 'GR',
+    latest_cumulative_confirmed: 4838811,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0bb35'),
+        location_key: 'GR',
+        population: 10724599,
+        population_male: 5208293,
+        population_female: 5516306,
+        population_rural: 2208848,
+        population_urban: 8507474,
+        population_largest_city: 3154152,
+        population_clustered: 3154152,
+        population_density: 82.5,
+        human_development_index: 0.865,
+        population_age_00_09: 994709,
+        population_age_10_19: 1088503,
+        population_age_20_29: 1121294,
+        population_age_30_39: 1375885,
+        population_age_40_49: 1608239,
+        population_age_50_59: 1500790,
+        population_age_60_69: 1278758,
+        population_age_70_79: 995987,
+        population_age_80_and_older: 760434
+      }
+    ],
+    total_elderly: 3035179,
+    total_population: 10724599,
+    confirmed_per_capita: 0.4511880584066593,
+    elderly_per_capita: 0.28301095453545627
+  },
+  {
+    _id: 'BG',
+    latest_cumulative_confirmed: 1250250,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d7682b4439fff097b4'),
+        location_key: 'BG',
+        population: 7000039,
+        population_male: 3395701,
+        population_female: 3604338,
+        population_rural: 1719734,
+        population_urban: 5256027,
+        population_largest_city: 1276937,
+        population_clustered: 1276937,
+        population_density: 63.9,
+        human_development_index: 0.782,
+        population_age_00_09: 670392,
+        population_age_10_19: 650000,
+        population_age_20_29: 727368,
+        population_age_30_39: 969414,
+        population_age_40_49: 1062720,
+        population_age_50_59: 946529,
+        population_age_60_69: 954084,
+        population_age_70_79: 680922,
+        population_age_80_and_older: 338610
+      }
+    ],
+    total_elderly: 1973616,
+    total_population: 7000039,
+    confirmed_per_capita: 0.17860614776574815,
+    elderly_per_capita: 0.28194357202867015
+  },
+  {
+    _id: 'DE',
+    latest_cumulative_confirmed: 57763003,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d7682b4439fff0b298'),
+        location_key: 'DE',
+        population: 83019213,
+        population_male: 40966691,
+        population_female: 42052522,
+        population_rural: 18807964,
+        population_urban: 64324835,
+        population_largest_city: 3556792,
+        population_clustered: 7977060,
+        population_density: 234.7,
+        human_development_index: 0.942,
+        population_age_00_09: 7588635,
+        population_age_10_19: 7705657,
+        population_age_20_29: 9800607,
+        population_age_30_39: 10646445,
+        population_age_40_49: 10426257,
+        population_age_50_59: 13474166,
+        population_age_60_69: 10302411,
+        population_age_70_79: 7685929,
+        population_age_80_and_older: 5389106
+      }
+    ],
+    total_elderly: 23377446,
+    total_population: 83019213,
+    confirmed_per_capita: 0.69577873497789,
+    elderly_per_capita: 0.28159079272408905
+  },
+  {
+    _id: 'HR',
+    latest_cumulative_confirmed: 1222007,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0bb66'),
+        location_key: 'HR',
+        population: 4076246,
+        population_male: 1972572,
+        population_female: 2103674,
+        population_rural: 1739182,
+        population_urban: 2328318,
+        population_largest_city: 685233,
+        population_clustered: null,
+        population_density: 73.2,
+        human_development_index: 0.831,
+        population_age_00_09: 387321,
+        population_age_10_19: 404914,
+        population_age_20_29: 479988,
+        population_age_30_39: 544058,
+        population_age_40_49: 542154,
+        population_age_50_59: 581554,
+        population_age_60_69: 560437,
+        population_age_70_79: 358187,
+        population_age_80_and_older: 217633
+      }
+    ],
+    total_elderly: 1136257,
+    total_population: 4076246,
+    confirmed_per_capita: 0.29978735336385487,
+    elderly_per_capita: 0.27875084084719126
+  },
+  {
+    _id: 'RS',
+    latest_cumulative_confirmed: 2324719,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0db08'),
+        location_key: 'RS',
+        population: 6963764,
+        population_male: 3392811,
+        population_female: 3570953,
+        population_rural: 3037732,
+        population_urban: 3907243,
+        population_largest_city: 1393717,
+        population_clustered: 1393717,
+        population_density: 91,
+        human_development_index: 0.771,
+        population_age_00_09: 654145,
+        population_age_10_19: 694332,
+        population_age_20_29: 804338,
+        population_age_30_39: 958562,
+        population_age_40_49: 971473,
+        population_age_50_59: 944645,
+        population_age_60_69: 1021979,
+        population_age_70_79: 595246,
+        population_age_80_and_older: 319044
+      }
+    ],
+    total_elderly: 1936269,
+    total_population: 6963764,
+    confirmed_per_capita: 0.3338308133360062,
+    elderly_per_capita: 0.2780491986804837
+  },
+  {
+    _id: 'PR',
+    latest_cumulative_confirmed: 943972,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0dabd'),
+        location_key: 'PR',
+        population: 2860840,
+        population_male: 1355518,
+        population_female: 1505322,
+        population_rural: 205163,
+        population_urban: 2988531,
+        population_largest_city: 2451375,
+        population_clustered: 2451375,
+        population_density: 322.53,
+        human_development_index: null,
+        population_age_00_09: 240324,
+        population_age_10_19: 394666,
+        population_age_20_29: 288753,
+        population_age_30_39: 331517,
+        population_age_40_49: 399244,
+        population_age_50_59: 414184,
+        population_age_60_69: 361025,
+        population_age_70_79: 273681,
+        population_age_80_and_older: 157446
+      }
+    ],
+    total_elderly: 792152,
+    total_population: 2860840,
+    confirmed_per_capita: 0.32996322758350694,
+    elderly_per_capita: 0.2768948980019854
+  },
+  {
+    _id: 'VI',
+    latest_cumulative_confirmed: 22970,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0e94b'),
+        location_key: 'VI',
+        population: 104423,
+        population_male: 49601,
+        population_female: 54822,
+        population_rural: 4444,
+        population_urban: 102187,
+        population_largest_city: null,
+        population_clustered: null,
+        population_density: 298.351,
+        human_development_index: null,
+        population_age_00_09: 12868,
+        population_age_10_19: 14018,
+        population_age_20_29: 12731,
+        population_age_30_39: 9731,
+        population_age_40_49: 11766,
+        population_age_50_59: 14449,
+        population_age_60_69: 14021,
+        population_age_70_79: 10901,
+        population_age_80_and_older: 3938
+      }
+    ],
+    total_elderly: 28860,
+    total_population: 104423,
+    confirmed_per_capita: 0.21997069611101003,
+    elderly_per_capita: 0.2763758941995537
+  },
+  {
+    _id: 'LV',
+    latest_cumulative_confirmed: 912002,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0c5bf'),
+        location_key: 'LV',
+        population: 1919968,
+        population_male: 884909,
+        population_female: 1035059,
+        population_rural: 607846,
+        population_urban: 1304943,
+        population_largest_city: 633820,
+        population_clustered: null,
+        population_density: 30.4,
+        human_development_index: 0.819,
+        population_age_00_09: 204389,
+        population_age_10_19: 189618,
+        population_age_20_29: 210869,
+        population_age_30_39: 266944,
+        population_age_40_49: 258763,
+        population_age_50_59: 270667,
+        population_age_60_69: 240208,
+        population_age_70_79: 170997,
+        population_age_80_and_older: 107513
+      }
+    ],
+    total_elderly: 518718,
+    total_population: 1919968,
+    confirmed_per_capita: 0.47500895848264135,
+    elderly_per_capita: 0.2701701278354639
+  },
+  {
+    _id: 'SI',
+    latest_cumulative_confirmed: 1149364,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0db7d'),
+        location_key: 'SI',
+        population: 2080908,
+        population_male: 1038656,
+        population_female: 1042252,
+        population_rural: 943292,
+        population_urban: 1144654,
+        population_largest_city: null,
+        population_clustered: null,
+        population_density: 102.9,
+        human_development_index: 0.88,
+        population_age_00_09: 213023,
+        population_age_10_19: 193538,
+        population_age_20_29: 216620,
+        population_age_30_39: 291897,
+        population_age_40_49: 303686,
+        population_age_50_59: 303649,
+        population_age_60_69: 276481,
+        population_age_70_79: 170981,
+        population_age_80_and_older: 111033
+      }
+    ],
+    total_elderly: 558495,
+    total_population: 2080908,
+    confirmed_per_capita: 0.5523377294911644,
+    elderly_per_capita: 0.26839004895939655
+  },
+  {
+    _id: 'LT',
+    latest_cumulative_confirmed: 1232367,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0c5bd'),
+        location_key: 'LT',
+        population: 2794184,
+        population_male: 1295591,
+        population_female: 1498593,
+        population_rural: 895831,
+        population_urban: 1891013,
+        population_largest_city: 537563,
+        population_clustered: null,
+        population_density: 44.7,
+        human_development_index: 0.839,
+        population_age_00_09: 292389,
+        population_age_10_19: 266287,
+        population_age_20_29: 345322,
+        population_age_30_39: 350470,
+        population_age_40_49: 374254,
+        population_age_50_59: 425044,
+        population_age_60_69: 343396,
+        population_age_70_79: 235483,
+        population_age_80_and_older: 161539
+      }
+    ],
+    total_elderly: 740418,
+    total_population: 2794184,
+    confirmed_per_capita: 0.44104718944779586,
+    elderly_per_capita: 0.2649854125569397
+  },
+  {
+    _id: 'HU',
+    latest_cumulative_confirmed: 2070443,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0bb72'),
+        location_key: 'HU',
+        population: 9772756,
+        population_male: 4675821,
+        population_female: 5096935,
+        population_rural: 2770367,
+        population_urban: 6999582,
+        population_largest_city: 1763913,
+        population_clustered: 1763913,
+        population_density: 107.1,
+        human_development_index: 0.828,
+        population_age_00_09: 927784,
+        population_age_10_19: 981009,
+        population_age_20_29: 1191157,
+        population_age_30_39: 1293534,
+        population_age_40_49: 1576171,
+        population_age_50_59: 1218271,
+        population_age_60_69: 1312208,
+        population_age_70_79: 839589,
+        population_age_80_and_older: 433033
+      }
+    ],
+    total_elderly: 2584830,
+    total_population: 9772756,
+    confirmed_per_capita: 0.21185866095500594,
+    elderly_per_capita: 0.26449345507040184
+  }
+]
+Type "it" for more
+database> 
+
+
+________________
+
+
+3: most_urban_countries_and_cases
+[
+  {
+    $addFields: {
+      country_code: {
+        $substr: ["$location_key", 0, 2]
+      }
+    }
+  },
+  {
+    $group: {
+      _id: "$country_code",
+      latest_cumulative_confirmed: {
+        $sum: "$cumulative_confirmed"
+      }
+    }
+  },
+  {
+    $lookup: {
+      from: "demographics_normalized",
+      let: { cc: "$_id" },
+      pipeline: [
+        {
+          $match: {
+            $expr: {
+              $eq: ["$location_key", "$$cc"]
+            }
+          }
+        }
+      ],
+      as: "demographics"
+    }
+  },
+  {
+    $addFields: {
+      total_population: {
+        $arrayElemAt: ["$demographics.population", 0]
+      },
+      urban_population: {
+        $arrayElemAt: ["$demographics.population_urban", 0]
+      }
+    }
+  },
+  {
+    $addFields: {
+      urban_per_capita: {
+        $cond: {
+          if: { $gt: ["$total_population", 0] },
+          then: { $divide: ["$urban_population", "$total_population"] },
+          else: null
+        }
+      },
+      confirmed_per_capita: {
+        $cond: {
+          if: { $gt: ["$total_population", 0] },
+          then: { $divide: ["$latest_cumulative_confirmed", "$total_population"] },
+          else: null
+        }
+      }
+    }
+  },
+  {
+    $match: {
+      urban_per_capita: { $gt: 0 }
+    }
+  },
+  {
+    $sort: { urban_per_capita: -1 }
+  },
+  {
+    $limit: 10
+  }
+]
+________________
+Query 3 Results of Query:
+database> db.epidemiology_normalized.aggregate([
+|   {
+|     $addFields: {
+|       country_code: {
+|         $substr: ["$location_key", 0, 2]
+|       }
+|     }
+|   },
+|   {
+|     $group: {
+|       _id: "$country_code",
+|       latest_cumulative_confirmed: {
+|         $sum: "$cumulative_confirmed"
+|       }
+|     }
+|   },
+|   {
+|     $lookup: {
+|       from: "demographics_normalized",
+|       let: { cc: "$_id" },
+|       pipeline: [
+|         {
+|           $match: {
+|             $expr: {
+|               $eq: ["$location_key", "$$cc"]
+|             }
+|           }
+|         }
+|       ],
+|       as: "demographics"
+|     }
+|   },
+|   {
+|     $addFields: {
+|       total_population: {
+|         $arrayElemAt: ["$demographics.population", 0]
+|       },
+|       urban_population: {
+|         $arrayElemAt: ["$demographics.population_urban", 0]
+|       }
+|     }
+|   },
+|   {
+|     $addFields: {
+|       urban_per_capita: {
+|         $cond: {
+|           if: { $gt: ["$total_population", 0] },
+|           then: { $divide: ["$urban_population", "$total_population"] },
+|           else: null
+|         }
+|       },
+|       confirmed_per_capita: {
+|         $cond: {
+|           if: { $gt: ["$total_population", 0] },
+|           then: { $divide: ["$latest_cumulative_confirmed", "$total_population"] },
+|           else: null
+|         }
+|       }
+|     }
+|   },
+|   {
+|     $match: {
+|       urban_per_capita: { $gt: 0 }
+|     }
+|   },
+|   {
+|     $sort: { urban_per_capita: -1 }
+|   },
+|   {
+|     $limit: 10
+|   }
+| ]
+| )
+[
+  {
+    _id: 'NR',
+    latest_cumulative_confirmed: 4610,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0d14b'),
+        location_key: 'NR',
+        population: 10834,
+        population_male: 4785,
+        population_female: 5460,
+        population_rural: 0,
+        population_urban: 12581,
+        population_largest_city: null,
+        population_clustered: null,
+        population_density: 541.7,
+        human_development_index: null,
+        population_age_00_09: 2210,
+        population_age_10_19: 1830,
+        population_age_20_29: 1547,
+        population_age_30_39: 1941,
+        population_age_40_49: 1191,
+        population_age_50_59: 885,
+        population_age_60_69: 499,
+        population_age_70_79: 118,
+        population_age_80_and_older: 22
+      }
+    ],
+    total_population: 10834,
+    urban_population: 12581,
+    urban_per_capita: 1.1612516152852133,
+    confirmed_per_capita: 0.42551227616762044
+  },
+  {
+    _id: 'PR',
+    latest_cumulative_confirmed: 943972,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0dabd'),
+        location_key: 'PR',
+        population: 2860840,
+        population_male: 1355518,
+        population_female: 1505322,
+        population_rural: 205163,
+        population_urban: 2988531,
+        population_largest_city: 2451375,
+        population_clustered: 2451375,
+        population_density: 322.53,
+        human_development_index: null,
+        population_age_00_09: 240324,
+        population_age_10_19: 394666,
+        population_age_20_29: 288753,
+        population_age_30_39: 331517,
+        population_age_40_49: 399244,
+        population_age_50_59: 414184,
+        population_age_60_69: 361025,
+        population_age_70_79: 273681,
+        population_age_80_and_older: 157446
+      }
+    ],
+    total_population: 2860840,
+    urban_population: 2988531,
+    urban_per_capita: 1.044634093483033,
+    confirmed_per_capita: 0.32996322758350694
+  },
+  {
+    _id: 'BM',
+    latest_cumulative_confirmed: 18019,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d7682b4439fff097d4'),
+        location_key: 'BM',
+        population: 62273,
+        population_male: 32322,
+        population_female: 34524,
+        population_rural: 0,
+        population_urban: 63918,
+        population_largest_city: null,
+        population_clustered: null,
+        population_density: 1245.46,
+        human_development_index: null,
+        population_age_00_09: 7430,
+        population_age_10_19: 7680,
+        population_age_20_29: 8063,
+        population_age_30_39: 7719,
+        population_age_40_49: 7253,
+        population_age_50_59: 10229,
+        population_age_60_69: 9484,
+        population_age_70_79: 5676,
+        population_age_80_and_older: 3313
+      }
+    ],
+    total_population: 62273,
+    urban_population: 63918,
+    urban_per_capita: 1.0264159427039006,
+    confirmed_per_capita: 0.2893549371316622
+  },
+  {
+    _id: 'HK',
+    latest_cumulative_confirmed: 15441,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0bb51'),
+        location_key: 'HK',
+        population: 7496988,
+        population_male: 3439666,
+        population_female: 4057322,
+        population_rural: 0,
+        population_urban: 7507400,
+        population_largest_city: 7490776,
+        population_clustered: 7490776,
+        population_density: 7139.989,
+        human_development_index: 0.933,
+        population_age_00_09: 664195,
+        population_age_10_19: 552659,
+        population_age_20_29: 867629,
+        population_age_30_39: 1122165,
+        population_age_40_49: 1129130,
+        population_age_50_59: 1207906,
+        population_age_60_69: 1048881,
+        population_age_70_79: 525084,
+        population_age_80_and_older: 379339
+      }
+    ],
+    total_population: 7496988,
+    urban_population: 7507400,
+    urban_per_capita: 1.0013888244185531,
+    confirmed_per_capita: 0.002059627146261939
+  },
+  {
+    _id: 'GI',
+    latest_cumulative_confirmed: 20069,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0bb30'),
+        location_key: 'GI',
+        population: 33691,
+        population_male: 17279,
+        population_female: 17225,
+        population_rural: 0,
+        population_urban: 33701,
+        population_largest_city: null,
+        population_clustered: null,
+        population_density: 3369.1,
+        human_development_index: null,
+        population_age_00_09: 4658,
+        population_age_10_19: 4385,
+        population_age_20_29: 5133,
+        population_age_30_39: 5068,
+        population_age_40_49: 4573,
+        population_age_50_59: 3222,
+        population_age_60_69: 3350,
+        population_age_70_79: 2640,
+        population_age_80_and_older: 1475
+      }
+    ],
+    total_population: 33691,
+    urban_population: 33701,
+    urban_per_capita: 1.0002968151731917,
+    confirmed_per_capita: 0.5956783710783295
+  },
+  {
+    _id: 'MC',
+    latest_cumulative_confirmed: 14471,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0c5d3'),
+        location_key: 'MC',
+        population: 39244,
+        population_male: 11648,
+        population_female: 12406,
+        population_rural: 0,
+        population_urban: 38964,
+        population_largest_city: null,
+        population_clustered: null,
+        population_density: 26338.255,
+        human_development_index: null,
+        population_age_00_09: 1599,
+        population_age_10_19: 2211,
+        population_age_20_29: 2292,
+        population_age_30_39: 2094,
+        population_age_40_49: 2662,
+        population_age_50_59: 3531,
+        population_age_60_69: 3488,
+        population_age_70_79: 3275,
+        population_age_80_and_older: 2903
+      }
+    ],
+    total_population: 39244,
+    urban_population: 38964,
+    urban_per_capita: 0.9928651513607175,
+    confirmed_per_capita: 0.3687442666394863
+  },
+  {
+    _id: 'KY',
+    latest_cumulative_confirmed: 30545,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0c5b4'),
+        location_key: 'KY',
+        population: 65720,
+        population_male: 37180,
+        population_female: 39213,
+        population_rural: 0,
+        population_urban: 64948,
+        population_largest_city: null,
+        population_clustered: null,
+        population_density: 273.833,
+        human_development_index: null,
+        population_age_00_09: 9182,
+        population_age_10_19: 8787,
+        population_age_20_29: 9727,
+        population_age_30_39: 10004,
+        population_age_40_49: 10819,
+        population_age_50_59: 11693,
+        population_age_60_69: 9471,
+        population_age_70_79: 4638,
+        population_age_80_and_older: 2072
+      }
+    ],
+    total_population: 65720,
+    urban_population: 64948,
+    urban_per_capita: 0.9882531953743153,
+    confirmed_per_capita: 0.46477480219111383
+  },
+  {
+    _id: 'MO',
+    latest_cumulative_confirmed: 793,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0c5dc'),
+        location_key: 'MO',
+        population: 649342,
+        population_male: 312100,
+        population_female: 337242,
+        population_rural: 0,
+        population_urban: 640445,
+        population_largest_city: 642090,
+        population_clustered: null,
+        population_density: 21717.124,
+        human_development_index: null,
+        population_age_00_09: 68817,
+        population_age_10_19: 46834,
+        population_age_20_29: 88332,
+        population_age_30_39: 129802,
+        population_age_40_49: 93402,
+        population_age_50_59: 99615,
+        population_age_60_69: 78994,
+        population_age_70_79: 29881,
+        population_age_80_and_older: 13665
+      }
+    ],
+    total_population: 649342,
+    urban_population: 640445,
+    urban_per_capita: 0.9862984374951874,
+    confirmed_per_capita: 0.0012212362668670748
+  },
+  {
+    _id: 'KW',
+    latest_cumulative_confirmed: 657745,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0c5b3'),
+        location_key: 'KW',
+        population: 4270563,
+        population_male: 2614446,
+        population_female: 1656117,
+        population_rural: 0,
+        population_urban: 4207083,
+        population_largest_city: 3052493,
+        population_clustered: 3052493,
+        population_density: 239.65,
+        human_development_index: 0.803,
+        population_age_00_09: 608326,
+        population_age_10_19: 533226,
+        population_age_20_29: 444882,
+        population_age_30_39: 878556,
+        population_age_40_49: 965369,
+        population_age_50_59: 561299,
+        population_age_60_69: 220263,
+        population_age_70_79: 48550,
+        population_age_80_and_older: 10092
+      }
+    ],
+    total_population: 4270563,
+    urban_population: 4207083,
+    urban_per_capita: 0.9851354493541016,
+    confirmed_per_capita: 0.1540183343507636
+  },
+  {
+    _id: 'BE',
+    latest_cumulative_confirmed: 8947309,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d7682b4439fff097a7'),
+        location_key: 'BE',
+        population: 11455519,
+        population_male: 5644826,
+        population_female: 5810693,
+        population_rural: 224973,
+        population_urban: 11259082,
+        population_largest_city: 2065284,
+        population_clustered: 3102595,
+        population_density: 375.3,
+        human_development_index: 0.931,
+        population_age_00_09: 1282761,
+        population_age_10_19: 1288307,
+        population_age_20_29: 1416867,
+        population_age_30_39: 1488564,
+        population_age_40_49: 1508902,
+        population_age_50_59: 1594256,
+        population_age_60_69: 1326035,
+        population_age_70_79: 902858,
+        population_age_80_and_older: 646969
+      }
+    ],
+    total_population: 11455519,
+    urban_population: 11259082,
+    urban_per_capita: 0.982852195522525,
+    confirmed_per_capita: 0.7810478949055036
+  }
+]
+database> 
+
+
+
+
+
+
+________________
+
+
+4: least_urban_countries_and_cases
+[
+  {
+    $addFields: {
+      country_code: {
+        $substr: ["$location_key", 0, 2]
+      }
+    }
+  },
+  {
+    $group: {
+      _id: "$country_code",
+      latest_cumulative_confirmed: {
+        $sum: "$cumulative_confirmed"
+      }
+    }
+  },
+  {
+    $lookup: {
+      from: "demographics_normalized",
+      let: { cc: "$_id" },
+      pipeline: [
+        {
+          $match: {
+            $expr: {
+              $eq: ["$location_key", "$$cc"]
+            }
+          }
+        }
+      ],
+      as: "demographics"
+    }
+  },
+  {
+    $addFields: {
+      total_population: {
+        $arrayElemAt: ["$demographics.population", 0]
+      },
+      urban_population: {
+        $arrayElemAt: ["$demographics.population_urban", 0]
+      }
+    }
+  },
+  {
+    $addFields: {
+      urban_per_capita: {
+        $cond: {
+          if: { $gt: ["$total_population", 0] },
+          then: { $divide: ["$urban_population", "$total_population"] },
+          else: null
+        }
+      },
+      confirmed_per_capita: {
+        $cond: {
+          if: { $gt: ["$total_population", 0] },
+          then: { $divide: ["$latest_cumulative_confirmed", "$total_population"] },
+          else: null
+        }
+      }
+    }
+  },
+  {
+    $match: {
+      urban_per_capita: { $gt: 0 }
+    }
+  },
+  {
+    $sort: { urban_per_capita: 1 }
+  },
+  {
+    $limit: 10
+  }
+]
+________________
+Query 4 Results of Query:
+database> db.epidemiology_normalized.aggregate([
+|   {
+|     $addFields: {
+|       country_code: {
+|         $substr: ["$location_key", 0, 2]
+|       }
+|     }
+|   },
+|   {
+|     $group: {
+|       _id: "$country_code",
+|       latest_cumulative_confirmed: {
+|         $sum: "$cumulative_confirmed"
+|       }
+|     }
+|   },
+|   {
+|     $lookup: {
+|       from: "demographics_normalized",
+|       let: { cc: "$_id" },
+|       pipeline: [
+|         {
+|           $match: {
+|             $expr: {
+|               $eq: ["$location_key", "$$cc"]
+|             }
+|           }
+|         }
+|       ],
+|       as: "demographics"
+|     }
+|   },
+|   {
+|     $addFields: {
+|       total_population: {
+|         $arrayElemAt: ["$demographics.population", 0]
+|       },
+|       urban_population: {
+|         $arrayElemAt: ["$demographics.population_urban", 0]
+|       }
+|     }
+|   },
+|   {
+|     $addFields: {
+|       urban_per_capita: {
+|         $cond: {
+|           if: { $gt: ["$total_population", 0] },
+|           then: { $divide: ["$urban_population", "$total_population"] },
+|           else: null
+|         }
+|       },
+|       confirmed_per_capita: {
+|         $cond: {
+|           if: { $gt: ["$total_population", 0] },
+|           then: { $divide: ["$latest_cumulative_confirmed", "$total_population"] },
+|           else: null
+|         }
+|       }
+|     }
+|   },
+|   {
+|     $match: {
+|       urban_per_capita: { $gt: 0 }
+|     }
+|   },
+|   {
+|     $sort: { urban_per_capita: 1 }
+|   },
+|   {
+|     $limit: 10
+|   }
+| ]
+| )
+[
+  {
+    _id: 'BI',
+    latest_cumulative_confirmed: 49882,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d7682b4439fff097d2'),
+        location_key: 'BI',
+        population: 11890781,
+        population_male: 5899864,
+        population_female: 5990917,
+        population_rural: 9989403,
+        population_urban: 1541177,
+        population_largest_city: 954424,
+        population_clustered: null,
+        population_density: 463.037,
+        human_development_index: 0.417,
+        population_age_00_09: 3872447,
+        population_age_10_19: 2725292,
+        population_age_20_29: 2029581,
+        population_age_30_39: 1539547,
+        population_age_40_49: 747632,
+        population_age_50_59: 491974,
+        population_age_60_69: 339631,
+        population_age_70_79: 112129,
+        population_age_80_and_older: 32548
+      }
+    ],
+    total_population: 11890781,
+    urban_population: 1541177,
+    urban_per_capita: 0.12961108273712216,
+    confirmed_per_capita: 0.004195014608376018
+  },
+  {
+    _id: 'PG',
+    latest_cumulative_confirmed: 44931,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0d8cb'),
+        location_key: 'PG',
+        population: 8947027,
+        population_male: 4568072,
+        population_female: 4378955,
+        population_rural: 7613275,
+        population_urban: 1162834,
+        population_largest_city: 374517,
+        population_clustered: null,
+        population_density: 19.757,
+        human_development_index: 0.555,
+        population_age_00_09: 2150348,
+        population_age_10_19: 1917883,
+        population_age_20_29: 1554184,
+        population_age_30_39: 1220537,
+        population_age_40_49: 938384,
+        population_age_50_59: 629119,
+        population_age_60_69: 372086,
+        population_age_70_79: 136655,
+        population_age_80_and_older: 27831
+      }
+    ],
+    total_population: 8947027,
+    urban_population: 1162834,
+    urban_per_capita: 0.12996875945495637,
+    confirmed_per_capita: 0.005021891629476473
+  },
+  {
+    _id: 'LI',
+    latest_cumulative_confirmed: 19390,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0c5b9'),
+        location_key: 'LI',
+        population: 38378,
+        population_male: 19025,
+        population_female: 19353,
+        population_rural: 32555,
+        population_urban: 5464,
+        population_largest_city: null,
+        population_clustered: null,
+        population_density: 242.1,
+        human_development_index: 0.908,
+        population_age_00_09: 3737,
+        population_age_10_19: 3891,
+        population_age_20_29: 4539,
+        population_age_30_39: 4888,
+        population_age_40_49: 5571,
+        population_age_50_59: 6339,
+        population_age_60_69: 4694,
+        population_age_70_79: 3263,
+        population_age_80_and_older: 1456
+      }
+    ],
+    total_population: 38378,
+    urban_population: 5464,
+    urban_per_capita: 0.14237323466569388,
+    confirmed_per_capita: 0.5052373755797592
+  },
+  {
+    _id: 'NE',
+    latest_cumulative_confirmed: 9388,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0cfb9'),
+        location_key: 'NE',
+        population: 24206636,
+        population_male: 12170165,
+        population_female: 12036471,
+        population_rural: 19460484,
+        population_urban: 3850231,
+        population_largest_city: 1251511,
+        population_clustered: 1251511,
+        population_density: 19.11,
+        human_development_index: 0.354,
+        population_age_00_09: 8758026,
+        population_age_10_19: 5901125,
+        population_age_20_29: 3717357,
+        population_age_30_39: 2259015,
+        population_age_40_49: 1528694,
+        population_age_50_59: 1046850,
+        population_age_60_69: 644749,
+        population_age_70_79: 295959,
+        population_age_80_and_older: 54861
+      }
+    ],
+    total_population: 24206636,
+    urban_population: 3850231,
+    urban_per_capita: 0.1590568387941224,
+    confirmed_per_capita: 0.0003878275362177545
+  },
+  {
+    _id: 'MW',
+    latest_cumulative_confirmed: 87842,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0c5e4'),
+        location_key: 'MW',
+        population: 19129955,
+        population_male: 9434037,
+        population_female: 9695918,
+        population_rural: 15429446,
+        population_urban: 3199301,
+        population_largest_city: 1074695,
+        population_clustered: 1074695,
+        population_density: 202.906,
+        human_development_index: 0.477,
+        population_age_00_09: 5662519,
+        population_age_10_19: 4738053,
+        population_age_20_29: 3377518,
+        population_age_30_39: 2286023,
+        population_age_40_49: 1436741,
+        population_age_50_59: 846148,
+        population_age_60_69: 480248,
+        population_age_70_79: 244242,
+        population_age_80_and_older: 58463
+      }
+    ],
+    total_population: 19129955,
+    urban_population: 3199301,
+    urban_per_capita: 0.16724038294914964,
+    confirmed_per_capita: 0.004591856070753957
+  },
+  {
+    _id: 'RW',
+    latest_cumulative_confirmed: 132474,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0db5d'),
+        location_key: 'RW',
+        population: 12952209,
+        population_male: 6367431,
+        population_female: 6584778,
+        population_rural: 10440846,
+        population_urban: 2186104,
+        population_largest_city: 1094796,
+        population_clustered: 1094796,
+        population_density: 525.019,
+        human_development_index: 0.524,
+        population_age_00_09: 3561023,
+        population_age_10_19: 2905795,
+        population_age_20_29: 2211043,
+        population_age_30_39: 1812554,
+        population_age_40_49: 1070094,
+        population_age_50_59: 728447,
+        population_age_60_69: 445154,
+        population_age_70_79: 174817,
+        population_age_80_and_older: 43282
+      }
+    ],
+    total_population: 12952209,
+    urban_population: 2186104,
+    urban_per_capita: 0.1687823289448155,
+    confirmed_per_capita: 0.01022790784182065
+  },
+  {
+    _id: 'WS',
+    latest_cumulative_confirmed: 15889,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0e94f'),
+        location_key: 'WS',
+        population: 198410,
+        population_male: 102703,
+        population_female: 95707,
+        population_rural: 161509,
+        population_urban: 35588,
+        population_largest_city: null,
+        population_clustered: null,
+        population_density: 70.11,
+        human_development_index: 0.713,
+        population_age_00_09: 51123,
+        population_age_10_19: 41998,
+        population_age_20_29: 31295,
+        population_age_30_39: 22012,
+        population_age_40_49: 19560,
+        population_age_50_59: 16470,
+        population_age_60_69: 9960,
+        population_age_70_79: 4580,
+        population_age_80_and_older: 1412
+      }
+    ],
+    total_population: 198410,
+    urban_population: 35588,
+    urban_per_capita: 0.17936595937704752,
+    confirmed_per_capita: 0.08008164911042791
+  },
+  {
+    _id: 'LC',
+    latest_cumulative_confirmed: 28959,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0c5b8'),
+        location_key: 'LC',
+        population: 183629,
+        population_male: 90422,
+        population_female: 93207,
+        population_rural: 148510,
+        population_urban: 34280,
+        population_largest_city: null,
+        population_clustered: null,
+        population_density: 301.031,
+        human_development_index: 0.747,
+        population_age_00_09: 21812,
+        population_age_10_19: 24335,
+        population_age_20_29: 32816,
+        population_age_30_39: 28447,
+        population_age_40_49: 25517,
+        population_age_50_59: 23375,
+        population_age_60_69: 14555,
+        population_age_70_79: 8357,
+        population_age_80_and_older: 4415
+      }
+    ],
+    total_population: 183629,
+    urban_population: 34280,
+    urban_per_capita: 0.18668075304009715,
+    confirmed_per_capita: 0.1577038485206585
+  },
+  {
+    _id: 'LK',
+    latest_cumulative_confirmed: 670519,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0c5ba'),
+        location_key: 'LK',
+        population: 21413250,
+        population_male: 10267351,
+        population_female: 11145899,
+        population_rural: 17750912,
+        population_urban: 4052088,
+        population_largest_city: 606158,
+        population_clustered: null,
+        population_density: 341.465,
+        human_development_index: 0.77,
+        population_age_00_09: 3350035,
+        population_age_10_19: 3386220,
+        population_age_20_29: 2901857,
+        population_age_30_39: 2820021,
+        population_age_40_49: 2881105,
+        population_age_50_59: 2554818,
+        population_age_60_69: 2013196,
+        population_age_70_79: 1146337,
+        population_age_80_and_older: 359661
+      }
+    ],
+    total_population: 21413250,
+    urban_population: 4052088,
+    urban_per_capita: 0.18923274141010824,
+    confirmed_per_capita: 0.031313275658762685
+  },
+  {
+    _id: 'SS',
+    latest_cumulative_confirmed: 17780,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0dba0'),
+        location_key: 'SS',
+        population: 11193729,
+        population_male: 5603014,
+        population_female: 5590715,
+        population_rural: 8860863,
+        population_urban: 2201250,
+        population_largest_city: 385765,
+        population_clustered: null,
+        population_density: 18.322,
+        human_development_index: 0.388,
+        population_age_00_09: 3245682,
+        population_age_10_19: 2581901,
+        population_age_20_29: 1962952,
+        population_age_30_39: 1334153,
+        population_age_40_49: 896837,
+        population_age_50_59: 595525,
+        population_age_60_69: 344937,
+        population_age_70_79: 182626,
+        population_age_80_and_older: 49116
+      }
+    ],
+    total_population: 11193729,
+    urban_population: 2201250,
+    urban_per_capita: 0.19665028517306432,
+    confirmed_per_capita: 0.0015883893562190043
+  }
+]
+database> 
+
+
+
+
+________________
+
+
+5: highest_population_density_and_cases
+[
+  {
+    $addFields: {
+      country_code: {
+        $substr: ["$location_key", 0, 2]
+      }
+    }
+  },
+  {
+    $group: {
+      _id: "$country_code",
+      latest_cumulative_confirmed: {
+        $sum: "$cumulative_confirmed"
+      }
+    }
+  },
+  {
+    $lookup: {
+      from: "demographics_normalized",
+      let: { cc: "$_id" },
+      pipeline: [
+        {
+          $match: {
+            $expr: {
+              $eq: ["$location_key", "$$cc"]
+            }
+          }
+        }
+      ],
+      as: "demographics"
+    }
+  },
+  {
+    $addFields: {
+      total_population: {
+        $arrayElemAt: ["$demographics.population", 0]
+      },
+      population_density: {
+        $arrayElemAt: ["$demographics.population_density", 0]
+      }
+    }
+  },
+  {
+    $addFields: {
+      confirmed_per_capita: {
+        $cond: {
+          if: { $gt: ["$total_population", 0] },
+          then: { $divide: ["$latest_cumulative_confirmed", "$total_population"] },
+          else: null
+        }
+      }
+    }
+  },
+  {
+    $match: {
+      population_density: { $gt: 0 },
+      confirmed_per_capita: { $gt: 0 }
+    }
+  },
+  {
+    $sort: { population_density: -1 }
+  }
+]
+________________
+Query 5 Result of Query:
+database> db.epidemiology_normalized.aggregate([
+|   {
+|     $addFields: {
+|       country_code: {
+|         $substr: ["$location_key", 0, 2]
+|       }
+|     }
+|   },
+|   {
+|     $group: {
+|       _id: "$country_code",
+|       latest_cumulative_confirmed: {
+|         $sum: "$cumulative_confirmed"
+|       }
+|     }
+|   },
+|   {
+|     $lookup: {
+|       from: "demographics_normalized",
+|       let: { cc: "$_id" },
+|       pipeline: [
+|         {
+|           $match: {
+|             $expr: {
+|               $eq: ["$location_key", "$$cc"]
+|             }
+|           }
+|         }
+|       ],
+|       as: "demographics"
+|     }
+|   },
+|   {
+|     $addFields: {
+|       total_population: {
+|         $arrayElemAt: ["$demographics.population", 0]
+|       },
+|       population_density: {
+|         $arrayElemAt: ["$demographics.population_density", 0]
+|       }
+|     }
+|   },
+|   {
+|     $addFields: {
+|       confirmed_per_capita: {
+|         $cond: {
+|           if: { $gt: ["$total_population", 0] },
+|           then: { $divide: ["$latest_cumulative_confirmed", "$total_population"] },
+|           else: null
+|         }
+|       }
+|     }
+|   },
+|   {
+|     $match: {
+|       population_density: { $gt: 0 },
+|       confirmed_per_capita: { $gt: 0 }
+|     }
+|   },
+|   {
+|     $sort: { population_density: -1 }
+|   }
+| ]
+| )
+[
+  {
+    _id: 'MC',
+    latest_cumulative_confirmed: 14471,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0c5d3'),
+        location_key: 'MC',
+        population: 39244,
+        population_male: 11648,
+        population_female: 12406,
+        population_rural: 0,
+        population_urban: 38964,
+        population_largest_city: null,
+        population_clustered: null,
+        population_density: 26338.255,
+        human_development_index: null,
+        population_age_00_09: 1599,
+        population_age_10_19: 2211,
+        population_age_20_29: 2292,
+        population_age_30_39: 2094,
+        population_age_40_49: 2662,
+        population_age_50_59: 3531,
+        population_age_60_69: 3488,
+        population_age_70_79: 3275,
+        population_age_80_and_older: 2903
+      }
+    ],
+    total_population: 39244,
+    population_density: 26338.255,
+    confirmed_per_capita: 0.3687442666394863
+  },
+  {
+    _id: 'MO',
+    latest_cumulative_confirmed: 793,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0c5dc'),
+        location_key: 'MO',
+        population: 649342,
+        population_male: 312100,
+        population_female: 337242,
+        population_rural: 0,
+        population_urban: 640445,
+        population_largest_city: 642090,
+        population_clustered: null,
+        population_density: 21717.124,
+        human_development_index: null,
+        population_age_00_09: 68817,
+        population_age_10_19: 46834,
+        population_age_20_29: 88332,
+        population_age_30_39: 129802,
+        population_age_40_49: 93402,
+        population_age_50_59: 99615,
+        population_age_60_69: 78994,
+        population_age_70_79: 29881,
+        population_age_80_and_older: 13665
+      }
+    ],
+    total_population: 649342,
+    population_density: 21717.124,
+    confirmed_per_capita: 0.0012212362668670748
+  },
+  {
+    _id: 'SG',
+    latest_cumulative_confirmed: 1867168,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0db7b'),
+        location_key: 'SG',
+        population: 5850343,
+        population_male: 3062257,
+        population_female: 2788086,
+        population_rural: 0,
+        population_urban: 5703569,
+        population_largest_city: 5868104,
+        population_clustered: 5868104,
+        population_density: 8357.633,
+        human_development_index: 0.932,
+        population_age_00_09: 479037,
+        population_age_10_19: 505794,
+        population_age_20_29: 833058,
+        population_age_30_39: 896615,
+        population_age_40_49: 964873,
+        population_age_50_59: 946222,
+        population_age_60_69: 799325,
+        population_age_70_79: 289634,
+        population_age_80_and_older: 135785
+      }
+    ],
+    total_population: 5850343,
+    population_density: 8357.633,
+    confirmed_per_capita: 0.3191553042274615
+  },
+  {
+    _id: 'HK',
+    latest_cumulative_confirmed: 15441,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0bb51'),
+        location_key: 'HK',
+        population: 7496988,
+        population_male: 3439666,
+        population_female: 4057322,
+        population_rural: 0,
+        population_urban: 7507400,
+        population_largest_city: 7490776,
+        population_clustered: 7490776,
+        population_density: 7139.989,
+        human_development_index: 0.933,
+        population_age_00_09: 664195,
+        population_age_10_19: 552659,
+        population_age_20_29: 867629,
+        population_age_30_39: 1122165,
+        population_age_40_49: 1129130,
+        population_age_50_59: 1207906,
+        population_age_60_69: 1048881,
+        population_age_70_79: 525084,
+        population_age_80_and_older: 379339
+      }
+    ],
+    total_population: 7496988,
+    population_density: 7139.989,
+    confirmed_per_capita: 0.002059627146261939
+  },
+  {
+    _id: 'GI',
+    latest_cumulative_confirmed: 20069,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0bb30'),
+        location_key: 'GI',
+        population: 33691,
+        population_male: 17279,
+        population_female: 17225,
+        population_rural: 0,
+        population_urban: 33701,
+        population_largest_city: null,
+        population_clustered: null,
+        population_density: 3369.1,
+        human_development_index: null,
+        population_age_00_09: 4658,
+        population_age_10_19: 4385,
+        population_age_20_29: 5133,
+        population_age_30_39: 5068,
+        population_age_40_49: 4573,
+        population_age_50_59: 3222,
+        population_age_60_69: 3350,
+        population_age_70_79: 2640,
+        population_age_80_and_older: 1475
+      }
+    ],
+    total_population: 33691,
+    population_density: 3369.1,
+    confirmed_per_capita: 0.5956783710783295
+  },
+  {
+    _id: 'BH',
+    latest_cumulative_confirmed: 674909,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d7682b4439fff097d1'),
+        location_key: 'BH',
+        population: 1701583,
+        population_male: 1100474,
+        population_female: 601109,
+        population_rural: 174063,
+        population_urban: 1467109,
+        population_largest_city: 600433,
+        population_clustered: null,
+        population_density: 2238.925,
+        human_development_index: 0.824,
+        population_age_00_09: 218135,
+        population_age_10_19: 181855,
+        population_age_20_29: 306670,
+        population_age_30_39: 507733,
+        population_age_40_49: 256721,
+        population_age_50_59: 140231,
+        population_age_60_69: 66572,
+        population_age_70_79: 17818,
+        population_age_80_and_older: 5848
+      }
+    ],
+    total_population: 1701583,
+    population_density: 2238.925,
+    confirmed_per_capita: 0.3966359560479859
+  },
+  {
+    _id: 'VA',
+    latest_cumulative_confirmed: 26,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0e92f'),
+        location_key: 'VA',
+        population: 809,
+        population_male: 6788,
+        population_female: 4208,
+        population_rural: null,
+        population_urban: null,
+        population_largest_city: null,
+        population_clustered: null,
+        population_density: 1838.636,
+        human_development_index: null,
+        population_age_00_09: 1603,
+        population_age_10_19: 1179,
+        population_age_20_29: 1196,
+        population_age_30_39: 1236,
+        population_age_40_49: 1329,
+        population_age_50_59: 1348,
+        population_age_60_69: 1253,
+        population_age_70_79: 1189,
+        population_age_80_and_older: 661
+      }
+    ],
+    total_population: 809,
+    population_density: 1838.636,
+    confirmed_per_capita: 0.032138442521631644
+  },
+  {
+    _id: 'MV',
+    latest_cumulative_confirmed: 184966,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0c5e3'),
+        location_key: 'MV',
+        population: 540542,
+        population_male: 342928,
+        population_female: 197614,
+        population_rural: 317308,
+        population_urban: 213645,
+        population_largest_city: null,
+        population_clustered: null,
+        population_density: 1801.807,
+        human_development_index: 0.717,
+        population_age_00_09: 72821,
+        population_age_10_19: 59438,
+        population_age_20_29: 139684,
+        population_age_30_39: 137607,
+        population_age_40_49: 64649,
+        population_age_50_59: 35316,
+        population_age_60_69: 18164,
+        population_age_70_79: 8466,
+        population_age_80_and_older: 4397
+      }
+    ],
+    total_population: 540542,
+    population_density: 1801.807,
+    confirmed_per_capita: 0.34218617609732455
+  },
+  {
+    _id: 'MT',
+    latest_cumulative_confirmed: 114348,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0c5e1'),
+        location_key: 'MT',
+        population: 493559,
+        population_male: 251836,
+        population_female: 241723,
+        population_rural: 26751,
+        population_urban: 475902,
+        population_largest_city: null,
+        population_clustered: null,
+        population_density: 1548.3,
+        human_development_index: 0.839,
+        population_age_00_09: 46307,
+        population_age_10_19: 43517,
+        population_age_20_29: 75568,
+        population_age_30_39: 81203,
+        population_age_40_49: 65167,
+        population_age_50_59: 58962,
+        population_age_60_69: 59304,
+        population_age_70_79: 42685,
+        population_age_80_and_older: 20846
+      }
+    ],
+    total_population: 493559,
+    population_density: 1548.3,
+    confirmed_per_capita: 0.23168050830802397
+  },
+  {
+    _id: 'BD',
+    latest_cumulative_confirmed: 2716780,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d7682b4439fff09790'),
+        location_key: 'BD',
+        population: 164689383,
+        population_male: 83259108,
+        population_female: 81430275,
+        population_rural: 102058744,
+        population_urban: 60987417,
+        population_largest_city: 20283552,
+        population_clustered: 25198185,
+        population_density: 1265.187,
+        human_development_index: 0.632,
+        population_age_00_09: 28972610,
+        population_age_10_19: 30674422,
+        population_age_20_29: 29765033,
+        population_age_30_39: 26511633,
+        population_age_40_49: 20651270,
+        population_age_50_59: 15005703,
+        population_age_60_69: 7296837,
+        population_age_70_79: 4095812,
+        population_age_80_and_older: 1716063
+      }
+    ],
+    total_population: 164689383,
+    population_density: 1265.187,
+    confirmed_per_capita: 0.016496388234085498
+  },
+  {
+    _id: 'SX',
+    latest_cumulative_confirmed: 10855,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0dbb1'),
+        location_key: 'SX',
+        population: 42882,
+        population_male: 15212,
+        population_female: 15660,
+        population_rural: 0,
+        population_urban: 40733,
+        population_largest_city: null,
+        population_clustered: null,
+        population_density: 1261.235,
+        human_development_index: null,
+        population_age_00_09: 3956,
+        population_age_10_19: 3769,
+        population_age_20_29: 4453,
+        population_age_30_39: 3269,
+        population_age_40_49: 3883,
+        population_age_50_59: 5744,
+        population_age_60_69: 3972,
+        population_age_70_79: 1495,
+        population_age_80_and_older: 330
+      }
+    ],
+    total_population: 42882,
+    population_density: 1261.235,
+    confirmed_per_capita: 0.25313651415512334
+  },
+  {
+    _id: 'BM',
+    latest_cumulative_confirmed: 18019,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d7682b4439fff097d4'),
+        location_key: 'BM',
+        population: 62273,
+        population_male: 32322,
+        population_female: 34524,
+        population_rural: 0,
+        population_urban: 63918,
+        population_largest_city: null,
+        population_clustered: null,
+        population_density: 1245.46,
+        human_development_index: null,
+        population_age_00_09: 7430,
+        population_age_10_19: 7680,
+        population_age_20_29: 8063,
+        population_age_30_39: 7719,
+        population_age_40_49: 7253,
+        population_age_50_59: 10229,
+        population_age_60_69: 9484,
+        population_age_70_79: 5676,
+        population_age_80_and_older: 3313
+      }
+    ],
+    total_population: 62273,
+    population_density: 1245.46,
+    confirmed_per_capita: 0.2893549371316622
+  },
+  {
+    _id: 'PS',
+    latest_cumulative_confirmed: 702768,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0dabe'),
+        location_key: 'PS',
+        population: 5101416,
+        population_male: 2586971,
+        population_female: 2514445,
+        population_rural: 1103858,
+        population_urban: 3581448,
+        population_largest_city: 693323,
+        population_clustered: null,
+        population_density: 847.411,
+        human_development_index: null,
+        population_age_00_09: 1364528,
+        population_age_10_19: 1109493,
+        population_age_20_29: 965725,
+        population_age_30_39: 664296,
+        population_age_40_49: 448140,
+        population_age_50_59: 297318,
+        population_age_60_69: 151853,
+        population_age_70_79: 77835,
+        population_age_80_and_older: 22228
+      }
+    ],
+    total_population: 5101416,
+    population_density: 847.411,
+    confirmed_per_capita: 0.1377593985669861
+  },
+  {
+    _id: 'YT',
+    latest_cumulative_confirmed: 40161,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0e952'),
+        location_key: 'YT',
+        population: 272813,
+        population_male: 134159,
+        population_female: 138654,
+        population_rural: null,
+        population_urban: null,
+        population_largest_city: null,
+        population_clustered: null,
+        population_density: 727.501,
+        human_development_index: null,
+        population_age_00_09: 71474,
+        population_age_10_19: 64566,
+        population_age_20_29: 43627,
+        population_age_30_39: 32986,
+        population_age_40_49: 27349,
+        population_age_50_59: 16164,
+        population_age_60_69: 9372,
+        population_age_70_79: 4998,
+        population_age_80_and_older: 2277
+      }
+    ],
+    total_population: 272813,
+    population_density: 727.501,
+    confirmed_per_capita: 0.1472107267615546
+  },
+  {
+    _id: 'TW',
+    latest_cumulative_confirmed: 10018963,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0dc0f'),
+        location_key: 'TW',
+        population: 23816775,
+        population_male: 11834313,
+        population_female: 11982462,
+        population_rural: null,
+        population_urban: null,
+        population_largest_city: null,
+        population_clustered: null,
+        population_density: 672.6,
+        human_development_index: 0.911,
+        population_age_00_09: 2052886,
+        population_age_10_19: 2188811,
+        population_age_20_29: 3120354,
+        population_age_30_39: 3548586,
+        population_age_40_49: 3787843,
+        population_age_50_59: 3659218,
+        population_age_60_69: 3101014,
+        population_age_70_79: 1488800,
+        population_age_80_and_older: 869263
+      }
+    ],
+    total_population: 23816775,
+    population_density: 672.6,
+    confirmed_per_capita: 0.420668331459654
+  },
+  {
+    _id: 'BB',
+    latest_cumulative_confirmed: 101979,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d7682b4439fff0978f'),
+        location_key: 'BB',
+        population: 287371,
+        population_male: 139084,
+        population_female: 148287,
+        population_rural: 197594,
+        population_urban: 89431,
+        population_largest_city: null,
+        population_clustered: null,
+        population_density: 668.305,
+        human_development_index: 0.8,
+        population_age_00_09: 30618,
+        population_age_10_19: 36512,
+        population_age_20_29: 37578,
+        population_age_30_39: 37124,
+        population_age_40_49: 39067,
+        population_age_50_59: 39936,
+        population_age_60_69: 33573,
+        population_age_70_79: 20154,
+        population_age_80_and_older: 12809
+      }
+    ],
+    total_population: 287371,
+    population_density: 668.305,
+    confirmed_per_capita: 0.35486879330203813
+  },
+  {
+    _id: 'LB',
+    latest_cumulative_confirmed: 1213200,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0c5b7'),
+        location_key: 'LB',
+        population: 6825442,
+        population_male: 3435746,
+        population_female: 3389696,
+        population_rural: 770719,
+        population_urban: 6084994,
+        population_largest_city: 2406875,
+        population_clustered: 2406875,
+        population_density: 667.199,
+        human_development_index: 0.757,
+        population_age_00_09: 1152157,
+        population_age_10_19: 1134997,
+        population_age_20_29: 1176574,
+        population_age_30_39: 1009646,
+        population_age_40_49: 862743,
+        population_age_50_59: 724778,
+        population_age_60_69: 447767,
+        population_age_70_79: 211573,
+        population_age_80_and_older: 105207
+      }
+    ],
+    total_population: 6825442,
+    population_density: 667.199,
+    confirmed_per_capita: 0.1777467305414067
+  },
+  {
+    _id: 'MU',
+    latest_cumulative_confirmed: 260947,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0c5e2'),
+        location_key: 'MU',
+        population: 1271767,
+        population_male: 627480,
+        population_female: 644287,
+        population_rural: 749731,
+        population_urban: 515980,
+        population_largest_city: null,
+        population_clustered: null,
+        population_density: 626.486,
+        human_development_index: 0.79,
+        population_age_00_09: 132886,
+        population_age_10_19: 175164,
+        population_age_20_29: 196809,
+        population_age_30_39: 175108,
+        population_age_40_49: 182090,
+        population_age_50_59: 175349,
+        population_age_60_69: 137990,
+        population_age_70_79: 69213,
+        population_age_80_and_older: 27158
+      }
+    ],
+    total_population: 1271767,
+    population_density: 626.486,
+    confirmed_per_capita: 0.20518459749309426
+  },
+  {
+    _id: 'AW',
+    latest_cumulative_confirmed: 42970,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d7682b4439fff0978c'),
+        location_key: 'AW',
+        population: 106766,
+        population_male: 50642,
+        population_female: 56124,
+        population_rural: 60019,
+        population_urban: 46295,
+        population_largest_city: null,
+        population_clustered: null,
+        population_density: 593.144,
+        human_development_index: null,
+        population_age_00_09: 11757,
+        population_age_10_19: 14010,
+        population_age_20_29: 14980,
+        population_age_30_39: 11244,
+        population_age_40_49: 14271,
+        population_age_50_59: 17205,
+        population_age_60_69: 13754,
+        population_age_70_79: 6958,
+        population_age_80_and_older: 2587
+      }
+    ],
+    total_population: 106766,
+    population_density: 593.144,
+    confirmed_per_capita: 0.40246895078957723
+  },
+  {
+    _id: 'SM',
+    latest_cumulative_confirmed: 20552,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0db9c'),
+        location_key: 'SM',
+        population: 33938,
+        population_male: 15936,
+        population_female: 17019,
+        population_rural: 891,
+        population_urban: 32969,
+        population_largest_city: null,
+        population_clustered: null,
+        population_density: 565.633,
+        human_development_index: null,
+        population_age_00_09: 3098,
+        population_age_10_19: 3625,
+        population_age_20_29: 3766,
+        population_age_30_39: 3664,
+        population_age_40_49: 4693,
+        population_age_50_59: 5377,
+        population_age_60_69: 3802,
+        population_age_70_79: 2811,
+        population_age_80_and_older: 2121
+      }
+    ],
+    total_population: 33938,
+    population_density: 565.633,
+    confirmed_per_capita: 0.6055748718250928
+  }
+]
+Type "it" for more
+database> 
+
+
+
+
+________________
+
+
+6: lowest_population_density_and_cases
+[
+  {
+    $addFields: {
+      country_code: {
+        $substr: ["$location_key", 0, 2]
+      }
+    }
+  },
+  {
+    $group: {
+      _id: "$country_code",
+      latest_cumulative_confirmed: {
+        $sum: "$cumulative_confirmed"
+      }
+    }
+  },
+  {
+    $lookup: {
+      from: "demographics_normalized",
+      let: { cc: "$_id" },
+      pipeline: [
+        {
+          $match: {
+            $expr: {
+              $eq: ["$location_key", "$$cc"]
+            }
+          }
+        }
+      ],
+      as: "demographics"
+    }
+  },
+  {
+    $addFields: {
+      total_population: {
+        $arrayElemAt: [
+          "$demographics.population",
+          0
+        ]
+      },
+      population_density: {
+        $arrayElemAt: [
+          "$demographics.population_density",
+          0
+        ]
+      }
+    }
+  },
+  {
+    $addFields: {
+      confirmed_per_capita: {
+        $cond: {
+          if: { $gt: ["$total_population", 0] },
+          then: {
+            $divide: [
+              "$latest_cumulative_confirmed",
+              "$total_population"
+            ]
+          },
+          else: null
+        }
+      }
+    }
+  },
+  {
+    $match: {
+      population_density: { $gt: 0 },
+      confirmed_per_capita: { $gt: 0 }
+    }
+  },
+  {
+    $sort: { population_density: 1 }
+  },
+  {
+    $limit: 10
+  }
+]
+________________
+Query 6 Results of Query:
+Type "it" for more
+database> db.epidemiology_normalized.aggregate([
+|   {
+|     $addFields: {
+|       country_code: {
+|         $substr: ["$location_key", 0, 2]
+|       }
+|     }
+|   },
+|   {
+|     $group: {
+|       _id: "$country_code",
+|       latest_cumulative_confirmed: {
+|         $sum: "$cumulative_confirmed"
+|       }
+|     }
+|   },
+|   {
+|     $lookup: {
+|       from: "demographics_normalized",
+|       let: { cc: "$_id" },
+|       pipeline: [
+|         {
+|           $match: {
+|             $expr: {
+|               $eq: ["$location_key", "$$cc"]
+|             }
+|           }
+|         }
+|       ],
+|       as: "demographics"
+|     }
+|   },
+|   {
+|     $addFields: {
+|       total_population: {
+|         $arrayElemAt: [
+|           "$demographics.population",
+|           0
+|         ]
+|       },
+|       population_density: {
+|         $arrayElemAt: [
+|           "$demographics.population_density",
+|           0
+|         ]
+|       }
+|     }
+|   },
+|   {
+|     $addFields: {
+|       confirmed_per_capita: {
+|         $cond: {
+|           if: { $gt: ["$total_population", 0] },
+|           then: {
+|             $divide: [
+|               "$latest_cumulative_confirmed",
+|               "$total_population"
+|             ]
+|           },
+|           else: null
+|         }
+|       }
+|     }
+|   },
+|   {
+|     $match: {
+|       population_density: { $gt: 0 },
+|       confirmed_per_capita: { $gt: 0 }
+|     }
+|   },
+|   {
+|     $sort: { population_density: 1 }
+|   },
+|   {
+|     $limit: 10
+|   }
+| ]
+| )
+[
+  {
+    _id: 'GL',
+    latest_cumulative_confirmed: 11971,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0bb31'),
+        location_key: 'GL',
+        population: 56772,
+        population_male: 25310,
+        population_female: 24138,
+        population_rural: 7280,
+        population_urban: 48945,
+        population_largest_city: null,
+        population_clustered: null,
+        population_density: 0.138,
+        human_development_index: null,
+        population_age_00_09: 6847,
+        population_age_10_19: 6865,
+        population_age_20_29: 7738,
+        population_age_30_39: 6648,
+        population_age_40_49: 4838,
+        population_age_50_59: 8106,
+        population_age_60_69: 5267,
+        population_age_70_79: 2337,
+        population_age_80_and_older: 803
+      }
+    ],
+    total_population: 56772,
+    population_density: 0.138,
+    confirmed_per_capita: 0.21086098781089269
+  },
+  {
+    _id: 'FK',
+    latest_cumulative_confirmed: 1886,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0b9f9'),
+        location_key: 'FK',
+        population: 3483,
+        population_male: 1385,
+        population_female: 1296,
+        population_rural: null,
+        population_urban: null,
+        population_largest_city: null,
+        population_clustered: null,
+        population_density: 0.286,
+        human_development_index: null,
+        population_age_00_09: 414,
+        population_age_10_19: 270,
+        population_age_20_29: 311,
+        population_age_30_39: 314,
+        population_age_40_49: 319,
+        population_age_50_59: 337,
+        population_age_60_69: 316,
+        population_age_70_79: 273,
+        population_age_80_and_older: 126
+      }
+    ],
+    total_population: 3483,
+    population_density: 0.286,
+    confirmed_per_capita: 0.5414872236577662
+  },
+  {
+    _id: 'MN',
+    latest_cumulative_confirmed: 981618,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0c5db'),
+        location_key: 'MN',
+        population: 3278292,
+        population_male: 1615039,
+        population_female: 1663253,
+        population_rural: 1014541,
+        population_urban: 2210626,
+        population_largest_city: 1552654,
+        population_clustered: 1552654,
+        population_density: 2.11,
+        human_development_index: 0.741,
+        population_age_00_09: 737475,
+        population_age_10_19: 500443,
+        population_age_20_29: 500016,
+        population_age_30_39: 564280,
+        population_age_40_49: 423046,
+        population_age_50_59: 314052,
+        population_age_60_69: 158362,
+        population_age_70_79: 59889,
+        population_age_80_and_older: 20729
+      }
+    ],
+    total_population: 3278292,
+    population_density: 2.11,
+    confirmed_per_capita: 0.29942970302828426
+  },
+  {
+    _id: 'NA',
+    latest_cumulative_confirmed: 166645,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0cfb7'),
+        location_key: 'NA',
+        population: 2540916,
+        population_male: 1231683,
+        population_female: 1309233,
+        population_rural: 1221272,
+        population_urban: 1273258,
+        population_largest_city: 417380,
+        population_clustered: null,
+        population_density: 3.086,
+        human_development_index: 0.647,
+        population_age_00_09: 654526,
+        population_age_10_19: 526434,
+        population_age_20_29: 472709,
+        population_age_30_39: 356847,
+        population_age_40_49: 237557,
+        population_age_50_59: 150334,
+        population_age_60_69: 87461,
+        population_age_70_79: 41131,
+        population_age_80_and_older: 13917
+      }
+    ],
+    total_population: 2540916,
+    population_density: 3.086,
+    confirmed_per_capita: 0.06558461594165253
+  },
+  {
+    _id: 'AU',
+    latest_cumulative_confirmed: 20249342,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d7682b4439fff09783'),
+        location_key: 'AU',
+        population: 25499881,
+        population_male: 12698625,
+        population_female: 12801256,
+        population_rural: 3519551,
+        population_urban: 21844756,
+        population_largest_city: 4870388,
+        population_clustered: 15446689,
+        population_density: 3.319,
+        human_development_index: 0.939,
+        population_age_00_09: 3308974,
+        population_age_10_19: 3130480,
+        population_age_20_29: 3375454,
+        population_age_30_39: 3718344,
+        population_age_40_49: 3306060,
+        population_age_50_59: 3107735,
+        population_age_60_69: 2651187,
+        population_age_70_79: 1846376,
+        population_age_80_and_older: 1055271
+      }
+    ],
+    total_population: 25499881,
+    population_density: 3.319,
+    confirmed_per_capita: 0.7940955489164832
+  },
+  {
+    _id: 'IS',
+    latest_cumulative_confirmed: 205284,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0c4bc'),
+        location_key: 'IS',
+        population: 356991,
+        population_male: 182837,
+        population_female: 174154,
+        population_rural: 22203,
+        population_urban: 339110,
+        population_largest_city: null,
+        population_clustered: null,
+        population_density: 3.5,
+        human_development_index: 0.899,
+        population_age_00_09: 44848,
+        population_age_10_19: 44914,
+        population_age_20_29: 55484,
+        population_age_30_39: 51650,
+        population_age_40_49: 45597,
+        population_age_50_59: 43927,
+        population_age_60_69: 36377,
+        population_age_70_79: 21716,
+        population_age_80_and_older: 12478
+      }
+    ],
+    total_population: 356991,
+    population_density: 3.5,
+    confirmed_per_capita: 0.5750397068833668
+  },
+  {
+    _id: 'GF',
+    latest_cumulative_confirmed: 93837,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0bb2d'),
+        location_key: 'GF',
+        population: 298682,
+        population_male: 147750,
+        population_female: 150932,
+        population_rural: null,
+        population_urban: null,
+        population_largest_city: null,
+        population_clustered: null,
+        population_density: 3.634,
+        human_development_index: null,
+        population_age_00_09: 66121,
+        population_age_10_19: 57553,
+        population_age_20_29: 46109,
+        population_age_30_39: 38719,
+        population_age_40_49: 36990,
+        population_age_50_59: 26711,
+        population_age_60_69: 17226,
+        population_age_70_79: 7222,
+        population_age_80_and_older: 2031
+      }
+    ],
+    total_population: 298682,
+    population_density: 3.634,
+    confirmed_per_capita: 0.3141702546521049
+  },
+  {
+    _id: 'SR',
+    latest_cumulative_confirmed: 81078,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0db9f'),
+        location_key: 'SR',
+        population: 586634,
+        population_male: 294822,
+        population_female: 291812,
+        population_rural: 197114,
+        population_urban: 384258,
+        population_largest_city: null,
+        population_clustered: null,
+        population_density: 3.76,
+        human_development_index: 0.72,
+        population_age_00_09: 104831,
+        population_age_10_19: 102231,
+        population_age_20_29: 95772,
+        population_age_30_39: 82786,
+        population_age_40_49: 72724,
+        population_age_50_59: 64828,
+        population_age_60_69: 36928,
+        population_age_70_79: 18685,
+        population_age_80_and_older: 7849
+      }
+    ],
+    total_population: 586634,
+    population_density: 3.76,
+    confirmed_per_capita: 0.13820883208269552
+  },
+  {
+    _id: 'LY',
+    latest_cumulative_confirmed: 532378,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0c5c0'),
+        location_key: 'LY',
+        population: 6871287,
+        population_male: 3468737,
+        population_female: 3402550,
+        population_rural: 1328855,
+        population_urban: 5448597,
+        population_largest_city: 1160918,
+        population_clustered: 1160918,
+        population_density: 3.905,
+        human_development_index: 0.706,
+        population_age_00_09: 1285421,
+        population_age_10_19: 1185744,
+        population_age_20_29: 1095416,
+        population_age_30_39: 1163468,
+        population_age_40_49: 1049200,
+        population_age_50_59: 617154,
+        population_age_60_69: 284259,
+        population_age_70_79: 138926,
+        population_age_80_and_older: 51699
+      }
+    ],
+    total_population: 6871287,
+    population_density: 3.905,
+    confirmed_per_capita: 0.0774786441026259
+  },
+  {
+    _id: 'GY',
+    latest_cumulative_confirmed: 71209,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0bb50'),
+        location_key: 'GY',
+        population: 786559,
+        population_male: 395549,
+        population_female: 391010,
+        population_rural: 573854,
+        population_urban: 208912,
+        population_largest_city: null,
+        population_clustered: null,
+        population_density: 3.996,
+        human_development_index: 0.654,
+        population_age_00_09: 147628,
+        population_age_10_19: 145351,
+        population_age_20_29: 145306,
+        population_age_30_39: 93109,
+        population_age_40_49: 90525,
+        population_age_50_59: 79337,
+        population_age_60_69: 51356,
+        population_age_70_79: 22940,
+        population_age_80_and_older: 11007
+      }
+    ],
+    total_population: 786559,
+    population_density: 3.996,
+    confirmed_per_capita: 0.09053230590457931
+  }
+]
+database> 
+
+
+
+
+________________
+
+
+7: highest_HDI_and_cases
+[
+  {
+    $addFields: {
+      country_code: {
+        $substr: ["$location_key", 0, 2]
+      }
+    }
+  },
+  {
+    $group: {
+      _id: "$country_code",
+      latest_cumulative_confirmed: {
+        $sum: "$cumulative_confirmed"
+      },
+      latest_cumulative_deceased: {
+        $sum: "$cumulative_deceased"
+      }
+    }
+  },
+  {
+    $lookup: {
+      from: "demographics_normalized",
+      let: { cc: "$_id" },
+      pipeline: [
+        {
+          $match: {
+            $expr: {
+              $eq: ["$location_key", "$$cc"]
+            }
+          }
+        }
+      ],
+      as: "demographics"
+    }
+  },
+  {
+    $addFields: {
+      total_population: {
+        $arrayElemAt: ["$demographics.population", 0]
+      },
+      hdi: {
+        $arrayElemAt: ["$demographics.human_development_index", 0]
+      }
+    }
+  },
+  {
+    $addFields: {
+      confirmed_per_capita: {
+        $cond: {
+          if: { $gt: ["$total_population", 0] },
+          then: { $divide: ["$latest_cumulative_confirmed", "$total_population"] },
+          else: null
+        }
+      },
+      death_rate: {
+        $cond: {
+          if: { $gt: ["$latest_cumulative_confirmed", 0] },
+          then: { $divide: ["$latest_cumulative_deceased", "$latest_cumulative_confirmed"] },
+          else: null
+        }
+      }
+    }
+  },
+  {
+    $match: {
+      hdi: { $gt: 0 },
+      confirmed_per_capita: { $gt: 0 }
+    }
+  },
+  {
+    $sort: { hdi: -1 }
+  },
+  {
+    $limit: 10
+  }
+]
+________________
+Query 7 Results of Query:
+database> db.epidemiology_normalized.aggregate([
+|   {
+|     $addFields: {
+|       country_code: {
+|         $substr: ["$location_key", 0, 2]
+|       }
+|     }
+|   },
+|   {
+|     $group: {
+|       _id: "$country_code",
+|       latest_cumulative_confirmed: {
+|         $sum: "$cumulative_confirmed"
+|       },
+|       latest_cumulative_deceased: {
+|         $sum: "$cumulative_deceased"
+|       }
+|     }
+|   },
+|   {
+|     $lookup: {
+|       from: "demographics_normalized",
+|       let: { cc: "$_id" },
+|       pipeline: [
+|         {
+|           $match: {
+|             $expr: {
+|               $eq: ["$location_key", "$$cc"]
+|             }
+|           }
+|         }
+|       ],
+|       as: "demographics"
+|     }
+|   },
+|   {
+|     $addFields: {
+|       total_population: {
+|         $arrayElemAt: ["$demographics.population", 0]
+|       },
+|       hdi: {
+|         $arrayElemAt: ["$demographics.human_development_index", 0]
+|       }
+|     }
+|   },
+|   {
+|     $addFields: {
+|       confirmed_per_capita: {
+|         $cond: {
+|           if: { $gt: ["$total_population", 0] },
+|           then: { $divide: ["$latest_cumulative_confirmed", "$total_population"] },
+|           else: null
+|         }
+|       },
+|       death_rate: {
+|         $cond: {
+|           if: { $gt: ["$latest_cumulative_confirmed", 0] },
+|           then: { $divide: ["$latest_cumulative_deceased", "$latest_cumulative_confirmed"] },
+|           else: null
+|         }
+|       }
+|     }
+|   },
+|   {
+|     $match: {
+|       hdi: { $gt: 0 },
+|       confirmed_per_capita: { $gt: 0 }
+|     }
+|   },
+|   {
+|     $sort: { hdi: -1 }
+|   },
+|   {
+|     $limit: 10
+|   }
+| ]
+| 
+| )
+[
+  {
+    _id: 'NO',
+    latest_cumulative_confirmed: 2900401,
+    latest_cumulative_deceased: 4038,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0d13c'),
+        location_key: 'NO',
+        population: 5328212,
+        population_male: 2685073,
+        population_female: 2643139,
+        population_rural: 929678,
+        population_urban: 4418218,
+        population_largest_city: 1026758,
+        population_clustered: 1026758,
+        population_density: 17.2,
+        human_development_index: 0.957,
+        population_age_00_09: 614916,
+        population_age_10_19: 640541,
+        population_age_20_29: 712419,
+        population_age_30_39: 717369,
+        population_age_40_49: 728639,
+        population_age_50_59: 691744,
+        population_age_60_69: 576747,
+        population_age_70_79: 419838,
+        population_age_80_and_older: 225999
+      }
+    ],
+    total_population: 5328212,
+    hdi: 0.957,
+    confirmed_per_capita: 0.5443478975686403,
+    death_rate: 0.0013922212825054191
+  },
+  {
+    _id: 'DE',
+    latest_cumulative_confirmed: 57763003,
+    latest_cumulative_deceased: 389150,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d7682b4439fff0b298'),
+        location_key: 'DE',
+        population: 83019213,
+        population_male: 40966691,
+        population_female: 42052522,
+        population_rural: 18807964,
+        population_urban: 64324835,
+        population_largest_city: 3556792,
+        population_clustered: 7977060,
+        population_density: 234.7,
+        human_development_index: 0.942,
+        population_age_00_09: 7588635,
+        population_age_10_19: 7705657,
+        population_age_20_29: 9800607,
+        population_age_30_39: 10646445,
+        population_age_40_49: 10426257,
+        population_age_50_59: 13474166,
+        population_age_60_69: 10302411,
+        population_age_70_79: 7685929,
+        population_age_80_and_older: 5389106
+      }
+    ],
+    total_population: 83019213,
+    hdi: 0.942,
+    confirmed_per_capita: 0.69577873497789,
+    death_rate: 0.006737011231912579
+  },
+  {
+    _id: 'AU',
+    latest_cumulative_confirmed: 20249342,
+    latest_cumulative_deceased: 28950,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d7682b4439fff09783'),
+        location_key: 'AU',
+        population: 25499881,
+        population_male: 12698625,
+        population_female: 12801256,
+        population_rural: 3519551,
+        population_urban: 21844756,
+        population_largest_city: 4870388,
+        population_clustered: 15446689,
+        population_density: 3.319,
+        human_development_index: 0.939,
+        population_age_00_09: 3308974,
+        population_age_10_19: 3130480,
+        population_age_20_29: 3375454,
+        population_age_30_39: 3718344,
+        population_age_40_49: 3306060,
+        population_age_50_59: 3107735,
+        population_age_60_69: 2651187,
+        population_age_70_79: 1846376,
+        population_age_80_and_older: 1055271
+      }
+    ],
+    total_population: 25499881,
+    hdi: 0.939,
+    confirmed_per_capita: 0.7940955489164832,
+    death_rate: 0.00142967608527724
+  },
+  {
+    _id: 'HK',
+    latest_cumulative_confirmed: 15441,
+    latest_cumulative_deceased: 216,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0bb51'),
+        location_key: 'HK',
+        population: 7496988,
+        population_male: 3439666,
+        population_female: 4057322,
+        population_rural: 0,
+        population_urban: 7507400,
+        population_largest_city: 7490776,
+        population_clustered: 7490776,
+        population_density: 7139.989,
+        human_development_index: 0.933,
+        population_age_00_09: 664195,
+        population_age_10_19: 552659,
+        population_age_20_29: 867629,
+        population_age_30_39: 1122165,
+        population_age_40_49: 1129130,
+        population_age_50_59: 1207906,
+        population_age_60_69: 1048881,
+        population_age_70_79: 525084,
+        population_age_80_and_older: 379339
+      }
+    ],
+    total_population: 7496988,
+    hdi: 0.933,
+    confirmed_per_capita: 0.002059627146261939,
+    death_rate: 0.013988731299786283
+  },
+  {
+    _id: 'SG',
+    latest_cumulative_confirmed: 1867168,
+    latest_cumulative_deceased: 1604,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0db7b'),
+        location_key: 'SG',
+        population: 5850343,
+        population_male: 3062257,
+        population_female: 2788086,
+        population_rural: 0,
+        population_urban: 5703569,
+        population_largest_city: 5868104,
+        population_clustered: 5868104,
+        population_density: 8357.633,
+        human_development_index: 0.932,
+        population_age_00_09: 479037,
+        population_age_10_19: 505794,
+        population_age_20_29: 833058,
+        population_age_30_39: 896615,
+        population_age_40_49: 964873,
+        population_age_50_59: 946222,
+        population_age_60_69: 799325,
+        population_age_70_79: 289634,
+        population_age_80_and_older: 135785
+      }
+    ],
+    total_population: 5850343,
+    hdi: 0.932,
+    confirmed_per_capita: 0.3191553042274615,
+    death_rate: 0.0008590549966580404
+  },
+  {
+    _id: 'NL',
+    latest_cumulative_confirmed: 48808188,
+    latest_cumulative_deceased: 133167,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0cfce'),
+        location_key: 'NL',
+        population: 17282163,
+        population_male: 8581086,
+        population_female: 8701077,
+        population_rural: 1408121,
+        population_urban: 15924729,
+        population_largest_city: 1140339,
+        population_clustered: 2149006,
+        population_density: 504,
+        human_development_index: 0.931,
+        population_age_00_09: 1783504,
+        population_age_10_19: 2008334,
+        population_age_20_29: 2201788,
+        population_age_30_39: 2108199,
+        population_age_40_49: 2261107,
+        population_age_50_59: 2508388,
+        population_age_60_69: 2089913,
+        population_age_70_79: 1522110,
+        population_age_80_and_older: 798820
+      }
+    ],
+    total_population: 17282163,
+    hdi: 0.931,
+    confirmed_per_capita: 2.8241944020548817,
+    death_rate: 0.002728374181807364
+  },
+  {
+    _id: 'BE',
+    latest_cumulative_confirmed: 8947309,
+    latest_cumulative_deceased: 32605,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d7682b4439fff097a7'),
+        location_key: 'BE',
+        population: 11455519,
+        population_male: 5644826,
+        population_female: 5810693,
+        population_rural: 224973,
+        population_urban: 11259082,
+        population_largest_city: 2065284,
+        population_clustered: 3102595,
+        population_density: 375.3,
+        human_development_index: 0.931,
+        population_age_00_09: 1282761,
+        population_age_10_19: 1288307,
+        population_age_20_29: 1416867,
+        population_age_30_39: 1488564,
+        population_age_40_49: 1508902,
+        population_age_50_59: 1594256,
+        population_age_60_69: 1326035,
+        population_age_70_79: 902858,
+        population_age_80_and_older: 646969
+      }
+    ],
+    total_population: 11455519,
+    hdi: 0.931,
+    confirmed_per_capita: 0.7810478949055036,
+    death_rate: 0.003644112436487887
+  },
+  {
+    _id: 'CH',
+    latest_cumulative_confirmed: 8078882,
+    latest_cumulative_deceased: 27405,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d7682b4439fff0adf5'),
+        location_key: 'CH',
+        population: 8544527,
+        population_male: 4237121,
+        population_female: 4307406,
+        population_rural: 2242404,
+        population_urban: 6332428,
+        population_largest_city: 1383092,
+        population_clustered: 1383092,
+        population_density: 213.6,
+        human_development_index: 0.93,
+        population_age_00_09: 868184,
+        population_age_10_19: 841274,
+        population_age_20_29: 1052733,
+        population_age_30_39: 1215196,
+        population_age_40_49: 1204432,
+        population_age_50_59: 1281878,
+        population_age_60_69: 931525,
+        population_age_70_79: 705653,
+        population_age_80_and_older: 443652
+      }
+    ],
+    total_population: 8544527,
+    hdi: 0.93,
+    confirmed_per_capita: 0.945503712493389,
+    death_rate: 0.0033921772839360692
+  },
+  {
+    _id: 'DK',
+    latest_cumulative_confirmed: 3283706,
+    latest_cumulative_deceased: 6987,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0b446'),
+        location_key: 'DK',
+        population: 5806081,
+        population_male: 2889073,
+        population_female: 2917008,
+        population_rural: 698575,
+        population_urban: 5119978,
+        population_largest_city: 1333888,
+        population_clustered: 1333888,
+        population_density: 138,
+        human_development_index: 0.929,
+        population_age_00_09: 618216,
+        population_age_10_19: 683669,
+        population_age_20_29: 783879,
+        population_age_30_39: 681161,
+        population_age_40_49: 762648,
+        population_age_50_59: 797775,
+        population_age_60_69: 662929,
+        population_age_70_79: 552058,
+        population_age_80_and_older: 263746
+      }
+    ],
+    total_population: 5806081,
+    hdi: 0.929,
+    confirmed_per_capita: 0.5655632430894436,
+    death_rate: 0.002127778796274697
+  },
+  {
+    _id: 'CA',
+    latest_cumulative_confirmed: 11685368,
+    latest_cumulative_deceased: 127948,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d7682b4439fff0add7'),
+        location_key: 'CA',
+        population: 37742157,
+        population_male: 18732178,
+        population_female: 19009979,
+        population_rural: 6960780,
+        population_urban: 30628482,
+        population_largest_city: 6139404,
+        population_clustered: 17211244,
+        population_density: 4.15,
+        human_development_index: 0.926,
+        population_age_00_09: 3970921,
+        population_age_10_19: 3971320,
+        population_age_20_29: 5096616,
+        population_age_30_39: 5278661,
+        population_age_40_49: 4846667,
+        population_age_50_59: 5182433,
+        population_age_60_69: 4712744,
+        population_age_70_79: 3018676,
+        population_age_80_and_older: 1664119
+      }
+    ],
+    total_population: 37742157,
+    hdi: 0.926,
+    confirmed_per_capita: 0.309610497354457,
+    death_rate: 0.01094941982143823
+  }
+]
+database> 
+
+
+
+
+
+
+________________
+
+
+8: lowest_HDI_and_cases
+[
+  {
+    $addFields: {
+      country_code: {
+        $substr: ["$location_key", 0, 2]
+      }
+    }
+  },
+  {
+    $group: {
+      _id: "$country_code",
+      latest_cumulative_confirmed: {
+        $sum: "$cumulative_confirmed"
+      },
+      latest_cumulative_deceased: {
+        $sum: "$cumulative_deceased"
+      }
+    }
+  },
+  {
+    $lookup: {
+      from: "demographics_normalized",
+      let: { cc: "$_id" },
+      pipeline: [
+        {
+          $match: {
+            $expr: {
+              $eq: ["$location_key", "$$cc"]
+            }
+          }
+        }
+      ],
+      as: "demographics"
+    }
+  },
+  {
+    $addFields: {
+      total_population: {
+        $arrayElemAt: ["$demographics.population", 0]
+      },
+      hdi: {
+        $arrayElemAt: ["$demographics.human_development_index", 0]
+      }
+    }
+  },
+  {
+    $addFields: {
+      confirmed_per_capita: {
+        $cond: {
+          if: { $gt: ["$total_population", 0] },
+          then: { $divide: ["$latest_cumulative_confirmed", "$total_population"] },
+          else: null
+        }
+      },
+      death_rate: {
+        $cond: {
+          if: { $gt: ["$latest_cumulative_confirmed", 0] },
+          then: { $divide: ["$latest_cumulative_deceased", "$latest_cumulative_confirmed"] },
+          else: null
+        }
+      }
+    }
+  },
+  {
+    $match: {
+      hdi: { $gt: 0 },
+      confirmed_per_capita: { $gt: 0 }
+    }
+  },
+  {
+    $sort: { hdi: 1 }
+  },
+  {
+    $limit: 10
+  }
+]
+________________
+Query 8 Results of Query:
+database> db.epidemiology_normalized.aggregate([
+|   {
+|     $addFields: {
+|       country_code: {
+|         $substr: ["$location_key", 0, 2]
+|       }
+|     }
+|   },
+|   {
+|     $group: {
+|       _id: "$country_code",
+|       latest_cumulative_confirmed: {
+|         $sum: "$cumulative_confirmed"
+|       },
+|       latest_cumulative_deceased: {
+|         $sum: "$cumulative_deceased"
+|       }
+|     }
+|   },
+|   {
+|     $lookup: {
+|       from: "demographics_normalized",
+|       let: { cc: "$_id" },
+|       pipeline: [
+|         {
+|           $match: {
+|             $expr: {
+|               $eq: ["$location_key", "$$cc"]
+|             }
+|           }
+|         }
+|       ],
+|       as: "demographics"
+|     }
+|   },
+|   {
+|     $addFields: {
+|       total_population: {
+|         $arrayElemAt: ["$demographics.population", 0]
+|       },
+|       hdi: {
+|         $arrayElemAt: ["$demographics.human_development_index", 0]
+|       }
+|     }
+|   },
+|   {
+|     $addFields: {
+|       confirmed_per_capita: {
+|         $cond: {
+|           if: { $gt: ["$total_population", 0] },
+|           then: { $divide: ["$latest_cumulative_confirmed", "$total_population"] },
+|           else: null
+|         }
+|       },
+|       death_rate: {
+|         $cond: {
+|           if: { $gt: ["$latest_cumulative_confirmed", 0] },
+|           then: { $divide: ["$latest_cumulative_deceased", "$latest_cumulative_confirmed"] },
+|           else: null
+|         }
+|       }
+|     }
+|   },
+|   {
+|     $match: {
+|       hdi: { $gt: 0 },
+|       confirmed_per_capita: { $gt: 0 }
+|     }
+|   },
+|   {
+|     $sort: { hdi: 1 }
+|   },
+|   {
+|     $limit: 10
+|   }
+| ]
+| )
+[
+  {
+    _id: 'NE',
+    latest_cumulative_confirmed: 9388,
+    latest_cumulative_deceased: 312,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0cfb9'),
+        location_key: 'NE',
+        population: 24206636,
+        population_male: 12170165,
+        population_female: 12036471,
+        population_rural: 19460484,
+        population_urban: 3850231,
+        population_largest_city: 1251511,
+        population_clustered: 1251511,
+        population_density: 19.11,
+        human_development_index: 0.354,
+        population_age_00_09: 8758026,
+        population_age_10_19: 5901125,
+        population_age_20_29: 3717357,
+        population_age_30_39: 2259015,
+        population_age_40_49: 1528694,
+        population_age_50_59: 1046850,
+        population_age_60_69: 644749,
+        population_age_70_79: 295959,
+        population_age_80_and_older: 54861
+      }
+    ],
+    total_population: 24206636,
+    hdi: 0.354,
+    confirmed_per_capita: 0.0003878275362177545,
+    death_rate: 0.033233915636983385
+  },
+  {
+    _id: 'CF',
+    latest_cumulative_confirmed: 14903,
+    latest_cumulative_deceased: 113,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d7682b4439fff0adf3'),
+        location_key: 'CF',
+        population: 4829764,
+        population_male: 2394042,
+        population_female: 2435722,
+        population_rural: 2763121,
+        population_urban: 1982064,
+        population_largest_city: 869599,
+        population_clustered: null,
+        population_density: 7.753,
+        human_development_index: 0.367,
+        population_age_00_09: 1435609,
+        population_age_10_19: 1264608,
+        population_age_20_29: 839990,
+        population_age_30_39: 501335,
+        population_age_40_49: 339529,
+        population_age_50_59: 232596,
+        population_age_60_69: 139061,
+        population_age_70_79: 61506,
+        population_age_80_and_older: 15530
+      }
+    ],
+    total_population: 4829764,
+    hdi: 0.367,
+    confirmed_per_capita: 0.0030856580155883395,
+    death_rate: 0.007582365966583909
+  },
+  {
+    _id: 'SS',
+    latest_cumulative_confirmed: 17780,
+    latest_cumulative_deceased: 138,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0dba0'),
+        location_key: 'SS',
+        population: 11193729,
+        population_male: 5603014,
+        population_female: 5590715,
+        population_rural: 8860863,
+        population_urban: 2201250,
+        population_largest_city: 385765,
+        population_clustered: null,
+        population_density: 18.322,
+        human_development_index: 0.388,
+        population_age_00_09: 3245682,
+        population_age_10_19: 2581901,
+        population_age_20_29: 1962952,
+        population_age_30_39: 1334153,
+        population_age_40_49: 896837,
+        population_age_50_59: 595525,
+        population_age_60_69: 344937,
+        population_age_70_79: 182626,
+        population_age_80_and_older: 49116
+      }
+    ],
+    total_population: 11193729,
+    hdi: 0.388,
+    confirmed_per_capita: 0.0015883893562190043,
+    death_rate: 0.007761529808773903
+  },
+  {
+    _id: 'TD',
+    latest_cumulative_confirmed: 7558,
+    latest_cumulative_deceased: 193,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0dbb5'),
+        location_key: 'TD',
+        population: 16425859,
+        population_male: 8200170,
+        population_female: 8225689,
+        population_rural: 12234603,
+        population_urban: 3712273,
+        population_largest_city: 1371524,
+        population_clustered: 1371524,
+        population_density: 13.045,
+        human_development_index: 0.404,
+        population_age_00_09: 5452549,
+        population_age_10_19: 4038728,
+        population_age_20_29: 2781017,
+        population_age_30_39: 1769646,
+        population_age_40_49: 1082831,
+        population_age_50_59: 654647,
+        population_age_60_69: 417349,
+        population_age_70_79: 180661,
+        population_age_80_and_older: 48431
+      }
+    ],
+    total_population: 16425859,
+    hdi: 0.404,
+    confirmed_per_capita: 0.00046012814307002146,
+    death_rate: 0.025535856046573168
+  },
+  {
+    _id: 'BI',
+    latest_cumulative_confirmed: 49882,
+    latest_cumulative_deceased: 15,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d7682b4439fff097d2'),
+        location_key: 'BI',
+        population: 11890781,
+        population_male: 5899864,
+        population_female: 5990917,
+        population_rural: 9989403,
+        population_urban: 1541177,
+        population_largest_city: 954424,
+        population_clustered: null,
+        population_density: 463.037,
+        human_development_index: 0.417,
+        population_age_00_09: 3872447,
+        population_age_10_19: 2725292,
+        population_age_20_29: 2029581,
+        population_age_30_39: 1539547,
+        population_age_40_49: 747632,
+        population_age_50_59: 491974,
+        population_age_60_69: 339631,
+        population_age_70_79: 112129,
+        population_age_80_and_older: 32548
+      }
+    ],
+    total_population: 11890781,
+    hdi: 0.417,
+    confirmed_per_capita: 0.004195014608376018,
+    death_rate: 0.00030070967483260497
+  },
+  {
+    _id: 'SL',
+    latest_cumulative_confirmed: 11490,
+    latest_cumulative_deceased: 204,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0db94'),
+        location_key: 'SL',
+        population: 7976985,
+        population_male: 3981239,
+        population_female: 3995746,
+        population_rural: 4493849,
+        population_urban: 3319366,
+        population_largest_city: 1168424,
+        population_clustered: 1168424,
+        population_density: 110.515,
+        human_development_index: 0.419,
+        population_age_00_09: 2225885,
+        population_age_10_19: 1867196,
+        population_age_20_29: 1405514,
+        population_age_30_39: 1017050,
+        population_age_40_49: 672894,
+        population_age_50_59: 419133,
+        population_age_60_69: 234025,
+        population_age_70_79: 108809,
+        population_age_80_and_older: 26479
+      }
+    ],
+    total_population: 7976985,
+    hdi: 0.419,
+    confirmed_per_capita: 0.0014403938330083358,
+    death_rate: 0.017754569190600523
+  },
+  {
+    _id: 'BF',
+    latest_cumulative_confirmed: 21128,
+    latest_cumulative_deceased: 387,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d7682b4439fff097b3'),
+        location_key: 'BF',
+        population: 20903278,
+        population_male: 10444713,
+        population_female: 10458565,
+        population_rural: 14229029,
+        population_urban: 6092349,
+        population_largest_city: 2652720,
+        population_clustered: 2652720,
+        population_density: 76.401,
+        human_development_index: 0.423,
+        population_age_00_09: 6552188,
+        population_age_10_19: 5029543,
+        population_age_20_29: 3508065,
+        population_age_30_39: 2428033,
+        population_age_40_49: 1587133,
+        population_age_50_59: 977490,
+        population_age_60_69: 538877,
+        population_age_70_79: 234237,
+        population_age_80_and_older: 47712
+      }
+    ],
+    total_population: 20903278,
+    hdi: 0.423,
+    confirmed_per_capita: 0.001010750562662947,
+    death_rate: 0.018316925407042786
+  },
+  {
+    _id: 'ML',
+    latest_cumulative_confirmed: 32385,
+    latest_cumulative_deceased: 739,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0c5d9'),
+        location_key: 'ML',
+        population: 20250834,
+        population_male: 10145174,
+        population_female: 10105660,
+        population_rural: 11178343,
+        population_urban: 8479688,
+        population_largest_city: 2529328,
+        population_clustered: 2529328,
+        population_density: 16.596,
+        human_development_index: 0.427,
+        population_age_00_09: 6760319,
+        population_age_10_19: 5009462,
+        population_age_20_29: 3203818,
+        population_age_30_39: 2160455,
+        population_age_40_49: 1485961,
+        population_age_50_59: 849119,
+        population_age_60_69: 501291,
+        population_age_70_79: 231083,
+        population_age_80_and_older: 49326
+      }
+    ],
+    total_population: 20250834,
+    hdi: 0.427,
+    confirmed_per_capita: 0.0015991933961830905,
+    death_rate: 0.02281920642272657
+  },
+  {
+    _id: 'LR',
+    latest_cumulative_confirmed: 7929,
+    latest_cumulative_deceased: 294,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0c5bb'),
+        location_key: 'LR',
+        population: 5057677,
+        population_male: 2542539,
+        population_female: 2515138,
+        population_rural: 2388948,
+        population_urban: 2548426,
+        population_largest_city: 1467026,
+        population_clustered: 1467026,
+        population_density: 52.509,
+        human_development_index: 0.435,
+        population_age_00_09: 1418816,
+        population_age_10_19: 1175025,
+        population_age_20_29: 840853,
+        population_age_30_39: 629808,
+        population_age_40_49: 444196,
+        population_age_50_59: 283828,
+        population_age_60_69: 168470,
+        population_age_70_79: 76455,
+        population_age_80_and_older: 20226
+      }
+    ],
+    total_population: 5057677,
+    hdi: 0.435,
+    confirmed_per_capita: 0.0015677157714895594,
+    death_rate: 0.037079076806659096
+  },
+  {
+    _id: 'MZ',
+    latest_cumulative_confirmed: 454887,
+    latest_cumulative_deceased: 4411,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0cfb3'),
+        location_key: 'MZ',
+        population: 31255435,
+        population_male: 15188235,
+        population_female: 16067200,
+        population_rural: 19273930,
+        population_urban: 11092106,
+        population_largest_city: 1668740,
+        population_clustered: 2773054,
+        population_density: 39.746,
+        human_development_index: 0.437,
+        population_age_00_09: 9717782,
+        population_age_10_19: 7595458,
+        population_age_20_29: 5294495,
+        population_age_30_39: 3588739,
+        population_age_40_49: 2289288,
+        population_age_50_59: 1400167,
+        population_age_60_69: 843662,
+        population_age_70_79: 420845,
+        population_age_80_and_older: 104999
+      }
+    ],
+    total_population: 31255435,
+    hdi: 0.437,
+    confirmed_per_capita: 0.014553852793922082,
+    death_rate: 0.009696913739016502
+  }
+]
+database> 
+________________
+
+
+9: highest_HDI_and_death_rate
+[
+  {
+    $addFields: {
+      country_code: {
+        $substr: ["$location_key", 0, 2]
+      }
+    }
+  },
+  {
+    $group: {
+      _id: "$country_code",
+      latest_cumulative_confirmed: {
+        $sum: "$cumulative_confirmed"
+      },
+      latest_cumulative_deceased: {
+        $sum: "$cumulative_deceased"
+      }
+    }
+  },
+  {
+    $lookup: {
+      from: "demographics_normalized",
+      let: { cc: "$_id" },
+      pipeline: [
+        {
+          $match: {
+            $expr: {
+              $eq: ["$location_key", "$$cc"]
+            }
+          }
+        }
+      ],
+      as: "demographics"
+    }
+  },
+  {
+    $addFields: {
+      total_population: {
+        $arrayElemAt: [
+          "$demographics.population",
+          0
+        ]
+      },
+      hdi: {
+        $arrayElemAt: [
+          "$demographics.human_development_index",
+          0
+        ]
+      }
+    }
+  },
+  {
+    $addFields: {
+      death_rate: {
+        $cond: {
+          if: {
+            $gt: [
+              "$latest_cumulative_confirmed",
+              0
+            ]
+          },
+          then: {
+            $divide: [
+              "$latest_cumulative_deceased",
+              "$latest_cumulative_confirmed"
+            ]
+          },
+          else: null
+        }
+      }
+    }
+  },
+  {
+    $match: {
+      hdi: { $gt: 0 },
+      death_rate: { $gt: 0 }
+    }
+  },
+  {
+    $sort: { hdi: -1 }
+  },
+  {
+    $limit: 10
+  }
+]
+________________
+Query 9 Results of Query:
+database> db.epidemiology_normalized.aggregate([
+|   {
+|     $addFields: {
+|       country_code: {
+|         $substr: ["$location_key", 0, 2]
+|       }
+|     }
+|   },
+|   {
+|     $group: {
+|       _id: "$country_code",
+|       latest_cumulative_confirmed: {
+|         $sum: "$cumulative_confirmed"
+|       },
+|       latest_cumulative_deceased: {
+|         $sum: "$cumulative_deceased"
+|       }
+|     }
+|   },
+|   {
+|     $lookup: {
+|       from: "demographics_normalized",
+|       let: { cc: "$_id" },
+|       pipeline: [
+|         {
+|           $match: {
+|             $expr: {
+|               $eq: ["$location_key", "$$cc"]
+|             }
+|           }
+|         }
+|       ],
+|       as: "demographics"
+|     }
+|   },
+|   {
+|     $addFields: {
+|       total_population: {
+|         $arrayElemAt: [
+|           "$demographics.population",
+|           0
+|         ]
+|       },
+|       hdi: {
+|         $arrayElemAt: [
+|           "$demographics.human_development_index",
+|           0
+|         ]
+|       }
+|     }
+|   },
+|   {
+|     $addFields: {
+|       death_rate: {
+|         $cond: {
+|           if: {
+|             $gt: [
+|               "$latest_cumulative_confirmed",
+|               0
+|             ]
+|           },
+|           then: {
+|             $divide: [
+|               "$latest_cumulative_deceased",
+|               "$latest_cumulative_confirmed"
+|             ]
+|           },
+|           else: null
+|         }
+|       }
+|     }
+|   },
+|   {
+|     $match: {
+|       hdi: { $gt: 0 },
+|       death_rate: { $gt: 0 }
+|     }
+|   },
+|   {
+|     $sort: { hdi: -1 }
+|   },
+|   {
+|     $limit: 10
+|   }
+| ]
+| )
+[
+  {
+    _id: 'NO',
+    latest_cumulative_confirmed: 2900401,
+    latest_cumulative_deceased: 4038,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0d13c'),
+        location_key: 'NO',
+        population: 5328212,
+        population_male: 2685073,
+        population_female: 2643139,
+        population_rural: 929678,
+        population_urban: 4418218,
+        population_largest_city: 1026758,
+        population_clustered: 1026758,
+        population_density: 17.2,
+        human_development_index: 0.957,
+        population_age_00_09: 614916,
+        population_age_10_19: 640541,
+        population_age_20_29: 712419,
+        population_age_30_39: 717369,
+        population_age_40_49: 728639,
+        population_age_50_59: 691744,
+        population_age_60_69: 576747,
+        population_age_70_79: 419838,
+        population_age_80_and_older: 225999
+      }
+    ],
+    total_population: 5328212,
+    hdi: 0.957,
+    death_rate: 0.0013922212825054191
+  },
+  {
+    _id: 'DE',
+    latest_cumulative_confirmed: 57763003,
+    latest_cumulative_deceased: 389150,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d7682b4439fff0b298'),
+        location_key: 'DE',
+        population: 83019213,
+        population_male: 40966691,
+        population_female: 42052522,
+        population_rural: 18807964,
+        population_urban: 64324835,
+        population_largest_city: 3556792,
+        population_clustered: 7977060,
+        population_density: 234.7,
+        human_development_index: 0.942,
+        population_age_00_09: 7588635,
+        population_age_10_19: 7705657,
+        population_age_20_29: 9800607,
+        population_age_30_39: 10646445,
+        population_age_40_49: 10426257,
+        population_age_50_59: 13474166,
+        population_age_60_69: 10302411,
+        population_age_70_79: 7685929,
+        population_age_80_and_older: 5389106
+      }
+    ],
+    total_population: 83019213,
+    hdi: 0.942,
+    death_rate: 0.006737011231912579
+  },
+  {
+    _id: 'AU',
+    latest_cumulative_confirmed: 20249342,
+    latest_cumulative_deceased: 28950,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d7682b4439fff09783'),
+        location_key: 'AU',
+        population: 25499881,
+        population_male: 12698625,
+        population_female: 12801256,
+        population_rural: 3519551,
+        population_urban: 21844756,
+        population_largest_city: 4870388,
+        population_clustered: 15446689,
+        population_density: 3.319,
+        human_development_index: 0.939,
+        population_age_00_09: 3308974,
+        population_age_10_19: 3130480,
+        population_age_20_29: 3375454,
+        population_age_30_39: 3718344,
+        population_age_40_49: 3306060,
+        population_age_50_59: 3107735,
+        population_age_60_69: 2651187,
+        population_age_70_79: 1846376,
+        population_age_80_and_older: 1055271
+      }
+    ],
+    total_population: 25499881,
+    hdi: 0.939,
+    death_rate: 0.00142967608527724
+  },
+  {
+    _id: 'HK',
+    latest_cumulative_confirmed: 15441,
+    latest_cumulative_deceased: 216,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0bb51'),
+        location_key: 'HK',
+        population: 7496988,
+        population_male: 3439666,
+        population_female: 4057322,
+        population_rural: 0,
+        population_urban: 7507400,
+        population_largest_city: 7490776,
+        population_clustered: 7490776,
+        population_density: 7139.989,
+        human_development_index: 0.933,
+        population_age_00_09: 664195,
+        population_age_10_19: 552659,
+        population_age_20_29: 867629,
+        population_age_30_39: 1122165,
+        population_age_40_49: 1129130,
+        population_age_50_59: 1207906,
+        population_age_60_69: 1048881,
+        population_age_70_79: 525084,
+        population_age_80_and_older: 379339
+      }
+    ],
+    total_population: 7496988,
+    hdi: 0.933,
+    death_rate: 0.013988731299786283
+  },
+  {
+    _id: 'SG',
+    latest_cumulative_confirmed: 1867168,
+    latest_cumulative_deceased: 1604,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0db7b'),
+        location_key: 'SG',
+        population: 5850343,
+        population_male: 3062257,
+        population_female: 2788086,
+        population_rural: 0,
+        population_urban: 5703569,
+        population_largest_city: 5868104,
+        population_clustered: 5868104,
+        population_density: 8357.633,
+        human_development_index: 0.932,
+        population_age_00_09: 479037,
+        population_age_10_19: 505794,
+        population_age_20_29: 833058,
+        population_age_30_39: 896615,
+        population_age_40_49: 964873,
+        population_age_50_59: 946222,
+        population_age_60_69: 799325,
+        population_age_70_79: 289634,
+        population_age_80_and_older: 135785
+      }
+    ],
+    total_population: 5850343,
+    hdi: 0.932,
+    death_rate: 0.0008590549966580404
+  },
+  {
+    _id: 'BE',
+    latest_cumulative_confirmed: 8947309,
+    latest_cumulative_deceased: 32605,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d7682b4439fff097a7'),
+        location_key: 'BE',
+        population: 11455519,
+        population_male: 5644826,
+        population_female: 5810693,
+        population_rural: 224973,
+        population_urban: 11259082,
+        population_largest_city: 2065284,
+        population_clustered: 3102595,
+        population_density: 375.3,
+        human_development_index: 0.931,
+        population_age_00_09: 1282761,
+        population_age_10_19: 1288307,
+        population_age_20_29: 1416867,
+        population_age_30_39: 1488564,
+        population_age_40_49: 1508902,
+        population_age_50_59: 1594256,
+        population_age_60_69: 1326035,
+        population_age_70_79: 902858,
+        population_age_80_and_older: 646969
+      }
+    ],
+    total_population: 11455519,
+    hdi: 0.931,
+    death_rate: 0.003644112436487887
+  },
+  {
+    _id: 'NL',
+    latest_cumulative_confirmed: 48808188,
+    latest_cumulative_deceased: 133167,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0cfce'),
+        location_key: 'NL',
+        population: 17282163,
+        population_male: 8581086,
+        population_female: 8701077,
+        population_rural: 1408121,
+        population_urban: 15924729,
+        population_largest_city: 1140339,
+        population_clustered: 2149006,
+        population_density: 504,
+        human_development_index: 0.931,
+        population_age_00_09: 1783504,
+        population_age_10_19: 2008334,
+        population_age_20_29: 2201788,
+        population_age_30_39: 2108199,
+        population_age_40_49: 2261107,
+        population_age_50_59: 2508388,
+        population_age_60_69: 2089913,
+        population_age_70_79: 1522110,
+        population_age_80_and_older: 798820
+      }
+    ],
+    total_population: 17282163,
+    hdi: 0.931,
+    death_rate: 0.002728374181807364
+  },
+  {
+    _id: 'CH',
+    latest_cumulative_confirmed: 8078882,
+    latest_cumulative_deceased: 27405,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d7682b4439fff0adf5'),
+        location_key: 'CH',
+        population: 8544527,
+        population_male: 4237121,
+        population_female: 4307406,
+        population_rural: 2242404,
+        population_urban: 6332428,
+        population_largest_city: 1383092,
+        population_clustered: 1383092,
+        population_density: 213.6,
+        human_development_index: 0.93,
+        population_age_00_09: 868184,
+        population_age_10_19: 841274,
+        population_age_20_29: 1052733,
+        population_age_30_39: 1215196,
+        population_age_40_49: 1204432,
+        population_age_50_59: 1281878,
+        population_age_60_69: 931525,
+        population_age_70_79: 705653,
+        population_age_80_and_older: 443652
+      }
+    ],
+    total_population: 8544527,
+    hdi: 0.93,
+    death_rate: 0.0033921772839360692
+  },
+  {
+    _id: 'DK',
+    latest_cumulative_confirmed: 3283706,
+    latest_cumulative_deceased: 6987,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0b446'),
+        location_key: 'DK',
+        population: 5806081,
+        population_male: 2889073,
+        population_female: 2917008,
+        population_rural: 698575,
+        population_urban: 5119978,
+        population_largest_city: 1333888,
+        population_clustered: 1333888,
+        population_density: 138,
+        human_development_index: 0.929,
+        population_age_00_09: 618216,
+        population_age_10_19: 683669,
+        population_age_20_29: 783879,
+        population_age_30_39: 681161,
+        population_age_40_49: 762648,
+        population_age_50_59: 797775,
+        population_age_60_69: 662929,
+        population_age_70_79: 552058,
+        population_age_80_and_older: 263746
+      }
+    ],
+    total_population: 5806081,
+    hdi: 0.929,
+    death_rate: 0.002127778796274697
+  },
+  {
+    _id: 'CA',
+    latest_cumulative_confirmed: 11685368,
+    latest_cumulative_deceased: 127948,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d7682b4439fff0add7'),
+        location_key: 'CA',
+        population: 37742157,
+        population_male: 18732178,
+        population_female: 19009979,
+        population_rural: 6960780,
+        population_urban: 30628482,
+        population_largest_city: 6139404,
+        population_clustered: 17211244,
+        population_density: 4.15,
+        human_development_index: 0.926,
+        population_age_00_09: 3970921,
+        population_age_10_19: 3971320,
+        population_age_20_29: 5096616,
+        population_age_30_39: 5278661,
+        population_age_40_49: 4846667,
+        population_age_50_59: 5182433,
+        population_age_60_69: 4712744,
+        population_age_70_79: 3018676,
+        population_age_80_and_older: 1664119
+      }
+    ],
+    total_population: 37742157,
+    hdi: 0.926,
+    death_rate: 0.01094941982143823
+  }
+]
+database> 
+________________
+
+
+10: lowest_HDI_and_death_rate
+[
+  {
+    $addFields: {
+      country_code: {
+        $substr: ["$location_key", 0, 2]
+      }
+    }
+  },
+  {
+    $group: {
+      _id: "$country_code",
+      latest_cumulative_confirmed: {
+        $sum: "$cumulative_confirmed"
+      },
+      latest_cumulative_deceased: {
+        $sum: "$cumulative_deceased"
+      }
+    }
+  },
+  {
+    $lookup: {
+      from: "demographics_normalized",
+      let: { cc: "$_id" },
+      pipeline: [
+        {
+          $match: {
+            $expr: {
+              $eq: ["$location_key", "$$cc"]
+            }
+          }
+        }
+      ],
+      as: "demographics"
+    }
+  },
+  {
+    $addFields: {
+      total_population: {
+        $arrayElemAt: ["$demographics.population", 0]
+      },
+      hdi: {
+        $arrayElemAt: ["$demographics.human_development_index", 0]
+      }
+    }
+  },
+  {
+    $addFields: {
+      death_rate: {
+        $cond: {
+          if: { $gt: ["$latest_cumulative_confirmed", 0] },
+          then: { $divide: ["$latest_cumulative_deceased", "$latest_cumulative_confirmed"] },
+          else: null
+        }
+      }
+    }
+  },
+  {
+    $match: {
+      hdi: { $gt: 0 },
+      death_rate: { $gt: 0 }
+    }
+  },
+  {
+    $sort: { hdi: 1 }
+  },
+  {
+    $limit: 10
+  }
+]
+________________
+Query 10 Results of Query:
+database> db.epidemiology_normalized.aggregate([
+|   {
+|     $addFields: {
+|       country_code: {
+|         $substr: ["$location_key", 0, 2]
+|       }
+|     }
+|   },
+|   {
+|     $group: {
+|       _id: "$country_code",
+|       latest_cumulative_confirmed: {
+|         $sum: "$cumulative_confirmed"
+|       },
+|       latest_cumulative_deceased: {
+|         $sum: "$cumulative_deceased"
+|       }
+|     }
+|   },
+|   {
+|     $lookup: {
+|       from: "demographics_normalized",
+|       let: { cc: "$_id" },
+|       pipeline: [
+|         {
+|           $match: {
+|             $expr: {
+|               $eq: ["$location_key", "$$cc"]
+|             }
+|           }
+|         }
+|       ],
+|       as: "demographics"
+|     }
+|   },
+|   {
+|     $addFields: {
+|       total_population: {
+|         $arrayElemAt: ["$demographics.population", 0]
+|       },
+|       hdi: {
+|         $arrayElemAt: ["$demographics.human_development_index", 0]
+|       }
+|     }
+|   },
+|   {
+|     $addFields: {
+|       death_rate: {
+|         $cond: {
+|           if: { $gt: ["$latest_cumulative_confirmed", 0] },
+|           then: { $divide: ["$latest_cumulative_deceased", "$latest_cumulative_confirmed"] },
+|           else: null
+|         }
+|       }
+|     }
+|   },
+|   {
+|     $match: {
+|       hdi: { $gt: 0 },
+|       death_rate: { $gt: 0 }
+|     }
+|   },
+|   {
+|     $sort: { hdi: 1 }
+|   },
+|   {
+|     $limit: 10
+|   }
+| ]
+| )
+[
+  {
+    _id: 'NE',
+    latest_cumulative_confirmed: 9388,
+    latest_cumulative_deceased: 312,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0cfb9'),
+        location_key: 'NE',
+        population: 24206636,
+        population_male: 12170165,
+        population_female: 12036471,
+        population_rural: 19460484,
+        population_urban: 3850231,
+        population_largest_city: 1251511,
+        population_clustered: 1251511,
+        population_density: 19.11,
+        human_development_index: 0.354,
+        population_age_00_09: 8758026,
+        population_age_10_19: 5901125,
+        population_age_20_29: 3717357,
+        population_age_30_39: 2259015,
+        population_age_40_49: 1528694,
+        population_age_50_59: 1046850,
+        population_age_60_69: 644749,
+        population_age_70_79: 295959,
+        population_age_80_and_older: 54861
+      }
+    ],
+    total_population: 24206636,
+    hdi: 0.354,
+    death_rate: 0.033233915636983385
+  },
+  {
+    _id: 'CF',
+    latest_cumulative_confirmed: 14903,
+    latest_cumulative_deceased: 113,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d7682b4439fff0adf3'),
+        location_key: 'CF',
+        population: 4829764,
+        population_male: 2394042,
+        population_female: 2435722,
+        population_rural: 2763121,
+        population_urban: 1982064,
+        population_largest_city: 869599,
+        population_clustered: null,
+        population_density: 7.753,
+        human_development_index: 0.367,
+        population_age_00_09: 1435609,
+        population_age_10_19: 1264608,
+        population_age_20_29: 839990,
+        population_age_30_39: 501335,
+        population_age_40_49: 339529,
+        population_age_50_59: 232596,
+        population_age_60_69: 139061,
+        population_age_70_79: 61506,
+        population_age_80_and_older: 15530
+      }
+    ],
+    total_population: 4829764,
+    hdi: 0.367,
+    death_rate: 0.007582365966583909
+  },
+  {
+    _id: 'SS',
+    latest_cumulative_confirmed: 17780,
+    latest_cumulative_deceased: 138,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0dba0'),
+        location_key: 'SS',
+        population: 11193729,
+        population_male: 5603014,
+        population_female: 5590715,
+        population_rural: 8860863,
+        population_urban: 2201250,
+        population_largest_city: 385765,
+        population_clustered: null,
+        population_density: 18.322,
+        human_development_index: 0.388,
+        population_age_00_09: 3245682,
+        population_age_10_19: 2581901,
+        population_age_20_29: 1962952,
+        population_age_30_39: 1334153,
+        population_age_40_49: 896837,
+        population_age_50_59: 595525,
+        population_age_60_69: 344937,
+        population_age_70_79: 182626,
+        population_age_80_and_older: 49116
+      }
+    ],
+    total_population: 11193729,
+    hdi: 0.388,
+    death_rate: 0.007761529808773903
+  },
+  {
+    _id: 'TD',
+    latest_cumulative_confirmed: 7558,
+    latest_cumulative_deceased: 193,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0dbb5'),
+        location_key: 'TD',
+        population: 16425859,
+        population_male: 8200170,
+        population_female: 8225689,
+        population_rural: 12234603,
+        population_urban: 3712273,
+        population_largest_city: 1371524,
+        population_clustered: 1371524,
+        population_density: 13.045,
+        human_development_index: 0.404,
+        population_age_00_09: 5452549,
+        population_age_10_19: 4038728,
+        population_age_20_29: 2781017,
+        population_age_30_39: 1769646,
+        population_age_40_49: 1082831,
+        population_age_50_59: 654647,
+        population_age_60_69: 417349,
+        population_age_70_79: 180661,
+        population_age_80_and_older: 48431
+      }
+    ],
+    total_population: 16425859,
+    hdi: 0.404,
+    death_rate: 0.025535856046573168
+  },
+  {
+    _id: 'BI',
+    latest_cumulative_confirmed: 49882,
+    latest_cumulative_deceased: 15,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d7682b4439fff097d2'),
+        location_key: 'BI',
+        population: 11890781,
+        population_male: 5899864,
+        population_female: 5990917,
+        population_rural: 9989403,
+        population_urban: 1541177,
+        population_largest_city: 954424,
+        population_clustered: null,
+        population_density: 463.037,
+        human_development_index: 0.417,
+        population_age_00_09: 3872447,
+        population_age_10_19: 2725292,
+        population_age_20_29: 2029581,
+        population_age_30_39: 1539547,
+        population_age_40_49: 747632,
+        population_age_50_59: 491974,
+        population_age_60_69: 339631,
+        population_age_70_79: 112129,
+        population_age_80_and_older: 32548
+      }
+    ],
+    total_population: 11890781,
+    hdi: 0.417,
+    death_rate: 0.00030070967483260497
+  },
+  {
+    _id: 'SL',
+    latest_cumulative_confirmed: 11490,
+    latest_cumulative_deceased: 204,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0db94'),
+        location_key: 'SL',
+        population: 7976985,
+        population_male: 3981239,
+        population_female: 3995746,
+        population_rural: 4493849,
+        population_urban: 3319366,
+        population_largest_city: 1168424,
+        population_clustered: 1168424,
+        population_density: 110.515,
+        human_development_index: 0.419,
+        population_age_00_09: 2225885,
+        population_age_10_19: 1867196,
+        population_age_20_29: 1405514,
+        population_age_30_39: 1017050,
+        population_age_40_49: 672894,
+        population_age_50_59: 419133,
+        population_age_60_69: 234025,
+        population_age_70_79: 108809,
+        population_age_80_and_older: 26479
+      }
+    ],
+    total_population: 7976985,
+    hdi: 0.419,
+    death_rate: 0.017754569190600523
+  },
+  {
+    _id: 'BF',
+    latest_cumulative_confirmed: 21128,
+    latest_cumulative_deceased: 387,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d7682b4439fff097b3'),
+        location_key: 'BF',
+        population: 20903278,
+        population_male: 10444713,
+        population_female: 10458565,
+        population_rural: 14229029,
+        population_urban: 6092349,
+        population_largest_city: 2652720,
+        population_clustered: 2652720,
+        population_density: 76.401,
+        human_development_index: 0.423,
+        population_age_00_09: 6552188,
+        population_age_10_19: 5029543,
+        population_age_20_29: 3508065,
+        population_age_30_39: 2428033,
+        population_age_40_49: 1587133,
+        population_age_50_59: 977490,
+        population_age_60_69: 538877,
+        population_age_70_79: 234237,
+        population_age_80_and_older: 47712
+      }
+    ],
+    total_population: 20903278,
+    hdi: 0.423,
+    death_rate: 0.018316925407042786
+  },
+  {
+    _id: 'ML',
+    latest_cumulative_confirmed: 32385,
+    latest_cumulative_deceased: 739,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0c5d9'),
+        location_key: 'ML',
+        population: 20250834,
+        population_male: 10145174,
+        population_female: 10105660,
+        population_rural: 11178343,
+        population_urban: 8479688,
+        population_largest_city: 2529328,
+        population_clustered: 2529328,
+        population_density: 16.596,
+        human_development_index: 0.427,
+        population_age_00_09: 6760319,
+        population_age_10_19: 5009462,
+        population_age_20_29: 3203818,
+        population_age_30_39: 2160455,
+        population_age_40_49: 1485961,
+        population_age_50_59: 849119,
+        population_age_60_69: 501291,
+        population_age_70_79: 231083,
+        population_age_80_and_older: 49326
+      }
+    ],
+    total_population: 20250834,
+    hdi: 0.427,
+    death_rate: 0.02281920642272657
+  },
+  {
+    _id: 'LR',
+    latest_cumulative_confirmed: 7929,
+    latest_cumulative_deceased: 294,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0c5bb'),
+        location_key: 'LR',
+        population: 5057677,
+        population_male: 2542539,
+        population_female: 2515138,
+        population_rural: 2388948,
+        population_urban: 2548426,
+        population_largest_city: 1467026,
+        population_clustered: 1467026,
+        population_density: 52.509,
+        human_development_index: 0.435,
+        population_age_00_09: 1418816,
+        population_age_10_19: 1175025,
+        population_age_20_29: 840853,
+        population_age_30_39: 629808,
+        population_age_40_49: 444196,
+        population_age_50_59: 283828,
+        population_age_60_69: 168470,
+        population_age_70_79: 76455,
+        population_age_80_and_older: 20226
+      }
+    ],
+    total_population: 5057677,
+    hdi: 0.435,
+    death_rate: 0.037079076806659096
+  },
+  {
+    _id: 'MZ',
+    latest_cumulative_confirmed: 454887,
+    latest_cumulative_deceased: 4411,
+    demographics: [
+      {
+        _id: ObjectId('699fb5d8682b4439fff0cfb3'),
+        location_key: 'MZ',
+        population: 31255435,
+        population_male: 15188235,
+        population_female: 16067200,
+        population_rural: 19273930,
+        population_urban: 11092106,
+        population_largest_city: 1668740,
+        population_clustered: 2773054,
+        population_density: 39.746,
+        human_development_index: 0.437,
+        population_age_00_09: 9717782,
+        population_age_10_19: 7595458,
+        population_age_20_29: 5294495,
+        population_age_30_39: 3588739,
+        population_age_40_49: 2289288,
+        population_age_50_59: 1400167,
+        population_age_60_69: 843662,
+        population_age_70_79: 420845,
+        population_age_80_and_older: 104999
+      }
+    ],
+    total_population: 31255435,
+    hdi: 0.437,
+    death_rate: 0.009696913739016502
+  }
+]
+database> 
+
+
+
+
+
+
+
+
+
+
+[a]more urban means more covid cases, less urban means less covid cases (besides "LI" (lithuania?))
+[b]looking at my results, seems like density doesn't matter
+[c]interesting: seems like higher HDI means more covid cases, lower HDI means less covid cases.
+[d]on surface level, seems that high HDI has lower death rates compared to low HDI countries, although have to do some proper visuals to see
